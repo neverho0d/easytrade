@@ -24,13 +24,11 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install Poetry using pipx
-      run: |
-        pipx install poetry
-        # Optional but recommended: Configure poetry to use python from setup-python action
-        # and use the cache directory for virtualenvs within CI
-        poetry config virtualenvs.prefer-active-python true --local
-        poetry config virtualenvs.in-project false --local
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        virtualenvs-create: true # Let Poetry manage the venv
+        virtualenvs-in-project: false # Use Poetry's default cache (faster in CI)
 
     - name: Install dependencies
       run: poetry install --with dev --no-interaction # Install main and dev deps
