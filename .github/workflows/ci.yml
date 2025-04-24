@@ -1,0 +1,51 @@
+name: Python CI
+
+# Trigger the workflow on pushes to the main branch and on pull requests
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner
+    strategy:
+      matrix:
+        # Run jobs for different Python versions if needed
+        python-version: ["3.11"]
+
+    steps:
+    - name: Check out repository code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'poetry' # Cache dependencies managed by Poetry
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        virtualenvs-create: true # Let Poetry manage the venv
+        virtualenvs-in-project: false # Use Poetry's default cache (faster in CI)
+
+    - name: Install dependencies
+      run: poetry install --with dev --no-interaction # Install main and dev deps
+
+    - name: Lint with Ruff (Check formatting and style)
+      run: poetry run ruff check src/ tests/ && poetry run ruff format --check src/ tests/
+
+    - name: Type check with MyPy
+      run: poetry run mypy src/
+
+    - name: Run tests with Pytest and Coverage
+      run: poetry run pytest --cov=src/marketplace_aggregator --cov-report=xml # Generate XML report for potential later use
+
+    # Optional: Upload coverage report (useful for platforms like Codecov)
+    # - name: Upload coverage reports to Codecov
+    #   uses: codecov/codecov-action@v4
+    #   with:
+    #     token: ${{ secrets.CODECOV_TOKEN }} # Requires setting up Codecov and a secret
+    #     slug: your-github-username/marketplace-aggregator # Optional: Specify repository slug
