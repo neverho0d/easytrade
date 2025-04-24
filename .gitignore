@@ -1,0 +1,20 @@
+# we have to ignore standard python files and common exclusions for a Python project
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+
+# we have to ignore the virtual environment
+.venv/
+
+# we have to ignore the pytest cache
+.pytest_cache/
+
+# we have to ignore the coverage directory
+.coverage/
+.coverage
+
+# we have to ignore the coverage html directory
+.coverage.html/

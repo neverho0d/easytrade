@@ -1,0 +1,64 @@
+[tool.poetry]
+name = "marketplace-aggregator"
+version = "0.1.0"
+description = "SaaS to aggregate marketplace listings."
+authors = ["Sergei Podushkin <nvrhood@gmail.com>"]
+readme = "README.md"
+packages = [{include = "marketplace_aggregator", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11" # Use Python 3.11+ for modern features like Self, asyncio.timeout etc.
+# Add core runtime dependencies here later (e.g., httpx, pydantic if needed)
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.1.1"   # Or latest stable version
+ruff = "^0.4.1"     # Fast linter/formatter
+mypy = "^1.9.0"     # Static type checker
+# Add other dev tools like pytest-cov, black, isort if desired
+pytest-cov = "^6.1.1"
+
+[tool.poetry.group.docs.dependencies]
+# Sphinx = "^7.2.6" # Example if using Sphinx later
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# Optional: Configure tools like ruff, pytest, mypy here
+[tool.ruff]
+line-length = 88
+# select = ["E", "F", "W", "I", "UP", "B", "C4"] # Example rule selection
+# ignore = []
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+# addopts = "-ra -q" # Example options
+
+[tool.mypy]
+python_version = "3.11"
+# strict = true # Optionally enable strict mode later
+# ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src/marketplace_aggregator"]
+# omit = [...] # Optionally omit entire files
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover", # Respect inline comments
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    # Regex to match typical main blocks:
+    'if __name__ == .__main__.:',
+    # Other common exclusions:
+    "@abstractmethod",
+    "\\.\\.\\.", # Ellipsis (...)
+    "pass",
+    "except ImportError:",
+    "def __repr__", # Often excluded if simple
+]
+# Optional: show missing lines in report
+show_missing = true
+# Optional: fail if coverage below threshold
+# fail_under = 80
