@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         # Run jobs for different Python versions if needed
-        python-version: ["3.11"]
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
     - name: Check out repository code
