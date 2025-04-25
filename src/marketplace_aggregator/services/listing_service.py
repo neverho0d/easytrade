@@ -131,11 +131,7 @@ class ListingService:
             return None
 
     def update_price_on_marketplace(
-        self,
-        listing_id: str,
-        marketplace_name: str,
-        sku: str,
-        new_price: float
+        self, listing_id: str, marketplace_name: str, sku: str, new_price: float
     ) -> bool:
         """
         Updates the price for a specific SKU within a listing on a marketplace.
@@ -147,13 +143,17 @@ class ListingService:
         Returns:
             True if the update was likely successful, False otherwise.
         """
-        print(f"\nService: Attempting price update for listing '{listing_id}', SKU '{sku}' on '{marketplace_name}' to {new_price:.2f}")
+        print(
+            f"\nService: Attempting price update for listing '{listing_id}', SKU '{sku}' on '{marketplace_name}' to {new_price:.2f}"
+        )
 
         # 1. Get adapter instance from self._marketplace_adapters
         #    - Handle case where marketplace_name is not found (print error, return False)
         adapter = self._marketplace_adapters.get(marketplace_name)
         if not adapter:
-            print(f"Service ERROR: Marketplace adapter for '{marketplace_name}' not configured.")
+            print(
+                f"Service ERROR: Marketplace adapter for '{marketplace_name}' not configured."
+            )
             return False
 
         # 2. Call adapter.update_listing_price(...)
@@ -161,12 +161,18 @@ class ListingService:
         #    - Print success or error messages
         #    - Return True on success, False on error
         try:
-            print(f"Service: Updating price for listing '{listing_id}' on '{marketplace_name}' to {new_price:.2f}")
+            print(
+                f"Service: Updating price for listing '{listing_id}' on '{marketplace_name}' to {new_price:.2f}"
+            )
             adapter.update_listing_price(listing_id, sku, new_price)
-            print(f"Service: Successfully updated price for listing '{listing_id}' on '{marketplace_name}' to {new_price:.2f}")
+            print(
+                f"Service: Successfully updated price for listing '{listing_id}' on '{marketplace_name}' to {new_price:.2f}"
+            )
             return True
         except ListingError as e:
-            print(f"Service ERROR: Failed to update price for listing '{listing_id}' on '{marketplace_name}'. Error: {e}")
+            print(
+                f"Service ERROR: Failed to update price for listing '{listing_id}' on '{marketplace_name}'. Error: {e}"
+            )
             return False
         except Exception as e:
             # Catch unexpected errors from the adapter for more robustness
@@ -175,10 +181,7 @@ class ListingService:
             return False
 
     def update_stock_on_marketplace(
-        self,
-        listing_id: str,
-        marketplace_name: str,
-        sku_stock: Dict[str, int]
+        self, listing_id: str, marketplace_name: str, sku_stock: Dict[str, int]
     ) -> bool:
         """
         Updates the stock levels for one or more SKUs within a listing on a marketplace.
@@ -189,11 +192,15 @@ class ListingService:
         Returns:
             True if the update was likely successful, False otherwise.
         """
-        print(f"\nService: Attempting stock update for listing '{listing_id}' on '{marketplace_name}': {sku_stock}")
+        print(
+            f"\nService: Attempting stock update for listing '{listing_id}' on '{marketplace_name}': {sku_stock}"
+        )
         # 1. Get adapter instance, return False if not found (print error)
         adapter = self._marketplace_adapters.get(marketplace_name)
         if not adapter:
-            print(f"Service ERROR: Marketplace adapter for '{marketplace_name}' not configured.")
+            print(
+                f"Service ERROR: Marketplace adapter for '{marketplace_name}' not configured."
+            )
             return False
 
         # 2. Call adapter.update_listing_stock(...) in try/except ListingError
@@ -202,10 +209,14 @@ class ListingService:
         try:
             print(f"Service: Updating stock via {adapter.name} adapter...")
             adapter.update_listing_stock(listing_id, sku_stock)
-            print(f"Service: Successfully updated stock for listing '{listing_id}' on '{marketplace_name}'.")
+            print(
+                f"Service: Successfully updated stock for listing '{listing_id}' on '{marketplace_name}'."
+            )
             return True
         except ListingError as e:
-            print(f"Service ERROR: Failed to update stock for listing '{listing_id}' on '{marketplace_name}'. Error: {e}")
+            print(
+                f"Service ERROR: Failed to update stock for listing '{listing_id}' on '{marketplace_name}'. Error: {e}"
+            )
             return False
         except Exception as e:
             # Catch unexpected errors from the adapter for more robustness
