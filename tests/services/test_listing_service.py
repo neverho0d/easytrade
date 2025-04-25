@@ -1,20 +1,24 @@
 # tests/services/test_listing_service.py
 
 import pytest
-from unittest.mock import ANY, MagicMock # Can use MagicMock directly or pytest-mock fixture
-from datetime import datetime
+from unittest.mock import (
+    ANY,
+    MagicMock,
+)  # Can use MagicMock directly or pytest-mock fixture
 
 # Import the code to be tested and the interfaces to be mocked
 from marketplace_aggregator.models.listing import Listing
 from marketplace_aggregator.repositories.listing_repo import ListingRepository
 from marketplace_aggregator.services.listing_service import ListingService
-from marketplace_aggregator.repositories.product_repo import ProductRepository, ProductData
+from marketplace_aggregator.repositories.product_repo import (
+    ProductRepository,
+)
 from marketplace_aggregator.adapters.marketplace import Marketplace, ListingError
-from marketplace_aggregator.models.product import InventoryProduct # For test data
-from marketplace_aggregator.models.variable_product import VariableProduct # For test data
+from marketplace_aggregator.models.product import InventoryProduct  # For test data
 
 
 # --- Pytest Fixtures for Setup ---
+
 
 @pytest.fixture
 def mock_product_repo() -> MagicMock:
@@ -24,11 +28,13 @@ def mock_product_repo() -> MagicMock:
     mock_repo = MagicMock(spec=ProductRepository)
     return mock_repo
 
+
 @pytest.fixture
 def mock_listing_repo() -> MagicMock:
     """Creates a mock ListingRepository."""
     mock_repo = MagicMock(spec=ListingRepository)
     return mock_repo
+
 
 @pytest.fixture
 def mock_marketplace_adapter() -> MagicMock:
@@ -38,18 +44,29 @@ def mock_marketplace_adapter() -> MagicMock:
     mock_adapter.name = "TestPlace"
     return mock_adapter
 
+
 @pytest.fixture
-def listing_service(mock_product_repo, mock_listing_repo, mock_marketplace_adapter) -> ListingService:
+def listing_service(
+    mock_product_repo, mock_listing_repo, mock_marketplace_adapter
+) -> ListingService:
     """Creates a ListingService instance with mocked dependencies."""
     # Create the dictionary of adapters to inject
     adapters = {mock_marketplace_adapter.name: mock_marketplace_adapter}
     # Inject the mocks into the service instance
-    service = ListingService(product_repo=mock_product_repo, listing_repo=mock_listing_repo, marketplace_adapters=adapters)
+    service = ListingService(
+        product_repo=mock_product_repo,
+        listing_repo=mock_listing_repo,
+        marketplace_adapters=adapters,
+    )
     return service
+
 
 # --- Test Cases ---
 
-def test_list_item_success(listing_service, mock_product_repo, mock_listing_repo, mock_marketplace_adapter):
+
+def test_list_item_success(
+    listing_service, mock_product_repo, mock_listing_repo, mock_marketplace_adapter
+):
     """
     Test the successful path for listing an item.
     """
@@ -73,12 +90,10 @@ def test_list_item_success(listing_service, mock_product_repo, mock_listing_repo
     # Use mock_marketplace_adapter.submit_listing.return_value = ...
     mock_marketplace_adapter.submit_listing.return_value = expected_listing_id
 
-
     # Act: Call the service method under test
     # Call listing_service.list_item_on_marketplace(...) and store the result
     actual_listing_id = listing_service.list_item_on_marketplace(
-        product_identifier=test_sku,
-        marketplace_name=marketplace_name
+        product_identifier=test_sku, marketplace_name=marketplace_name
     )
 
     # Assert: Check the results and mock interactions
@@ -91,19 +106,21 @@ def test_list_item_success(listing_service, mock_product_repo, mock_listing_repo
     # 3. Verify the marketplace adapter's submit_listing method was called correctly
     mock_marketplace_adapter.submit_listing.assert_called_once_with(test_product)
 
-def test_list_item_product_not_found(listing_service, mock_product_repo, mock_marketplace_adapter):
+
+def test_list_item_product_not_found(
+    listing_service, mock_product_repo, mock_marketplace_adapter
+):
     """
     Test listing when the product identifier is not found in the repository.
     """
     # Arrange: Configure the product repo mock to return None
     test_sku = "UNKNOWN-SKU"
     marketplace_name = "TestPlace"
-    mock_product_repo.get.return_value = None # Simulate product not found
+    mock_product_repo.get.return_value = None  # Simulate product not found
 
     # Act: Call the service method
     actual_listing_id = listing_service.list_item_on_marketplace(
-        product_identifier=test_sku,
-        marketplace_name=marketplace_name
+        product_identifier=test_sku, marketplace_name=marketplace_name
     )
 
     # Assert: Check the outcome
@@ -116,7 +133,10 @@ def test_list_item_product_not_found(listing_service, mock_product_repo, mock_ma
     # 3. Verify the marketplace adapter was *NOT* called (since product wasn't found)
     mock_marketplace_adapter.submit_listing.assert_not_called()
 
-def test_list_item_marketplace_not_found(mock_product_repo, mock_listing_repo, mock_marketplace_adapter):
+
+def test_list_item_marketplace_not_found(
+    mock_product_repo, mock_listing_repo, mock_marketplace_adapter
+):
     """
     Test listing when the marketplace name is not found in configured adapters.
     """
@@ -126,15 +146,14 @@ def test_list_item_marketplace_not_found(mock_product_repo, mock_listing_repo, m
     service_with_no_adapters = ListingService(
         product_repo=mock_product_repo,
         listing_repo=mock_listing_repo,
-        marketplace_adapters={} # Empty dict - no adapters configured
+        marketplace_adapters={},  # Empty dict - no adapters configured
     )
     test_sku = "TEST-SKU-01"
     marketplace_name = "NonExistentPlace"
 
     # Act: Call the service method with a marketplace name that won't be found
     actual_listing_id = service_with_no_adapters.list_item_on_marketplace(
-        product_identifier=test_sku,
-        marketplace_name=marketplace_name
+        product_identifier=test_sku, marketplace_name=marketplace_name
     )
 
     # Assert: Check the outcome
@@ -149,7 +168,10 @@ def test_list_item_marketplace_not_found(mock_product_repo, mock_listing_repo, m
     #  to be absolutely sure no adapter logic ran)
     mock_marketplace_adapter.submit_listing.assert_not_called()
 
-def test_list_item_listing_error(listing_service, mock_product_repo, mock_marketplace_adapter):
+
+def test_list_item_listing_error(
+    listing_service, mock_product_repo, mock_marketplace_adapter
+):
     """
     Test listing when the marketplace adapter raises a ListingError.
     """
@@ -168,8 +190,7 @@ def test_list_item_listing_error(listing_service, mock_product_repo, mock_market
 
     # Act: Call the service method
     actual_listing_id = listing_service.list_item_on_marketplace(
-        product_identifier=test_sku,
-        marketplace_name=marketplace_name
+        product_identifier=test_sku, marketplace_name=marketplace_name
     )
 
     # Assert: Check the outcome
@@ -183,14 +204,19 @@ def test_list_item_listing_error(listing_service, mock_product_repo, mock_market
     #    (even though it immediately raised an error)
     mock_marketplace_adapter.submit_listing.assert_called_once_with(test_product)
 
-def test_list_item_other_exception(listing_service, mock_product_repo, mock_marketplace_adapter):
+
+def test_list_item_other_exception(
+    listing_service, mock_product_repo, mock_marketplace_adapter
+):
     """
     Test listing when the marketplace adapter raises an unexpected Exception.
     """
     # Arrange: Configure mocks
     test_sku = "TEST-SKU-GEN-ERR"
     marketplace_name = "TestPlace"
-    test_product = InventoryProduct(_sku=test_sku, _title="General Error Item", _price=30.0)
+    test_product = InventoryProduct(
+        _sku=test_sku, _title="General Error Item", _price=30.0
+    )
     error_message = "Something unexpected broke!"
 
     # 1. Configure repo to return the product
@@ -201,8 +227,7 @@ def test_list_item_other_exception(listing_service, mock_product_repo, mock_mark
 
     # Act: Call the service method
     actual_listing_id = listing_service.list_item_on_marketplace(
-        product_identifier=test_sku,
-        marketplace_name=marketplace_name
+        product_identifier=test_sku, marketplace_name=marketplace_name
     )
 
     # Assert: Check the outcome
@@ -215,7 +240,10 @@ def test_list_item_other_exception(listing_service, mock_product_repo, mock_mark
     # 3. Verify the marketplace adapter's submit_listing method *was* called
     mock_marketplace_adapter.submit_listing.assert_called_once_with(test_product)
 
-def test_list_item_success_repo_save_fails(listing_service, mock_product_repo, mock_listing_repo, mock_marketplace_adapter):
+
+def test_list_item_success_repo_save_fails(
+    listing_service, mock_product_repo, mock_listing_repo, mock_marketplace_adapter
+):
     """
     Test successful listing submission but failure when saving to listing repo.
     """
@@ -237,8 +265,7 @@ def test_list_item_success_repo_save_fails(listing_service, mock_product_repo, m
 
     # Act: Call the service method
     actual_listing_id = listing_service.list_item_on_marketplace(
-        product_identifier=test_sku,
-        marketplace_name=marketplace_name
+        product_identifier=test_sku, marketplace_name=marketplace_name
     )
 
     # Assert: Check the outcome
@@ -253,7 +280,9 @@ def test_list_item_success_repo_save_fails(listing_service, mock_product_repo, m
 
     # 4. Verify the listing repository's add_or_update method *was* called
     #    (even though it raised an error). Check it was called with a Listing object.
-    mock_listing_repo.add_or_update.assert_called_once_with(ANY) # ANY checks arg exists
+    mock_listing_repo.add_or_update.assert_called_once_with(
+        ANY
+    )  # ANY checks arg exists
     # More detailed check (optional): Check the type and key attributes of the Listing passed
     call_args, _ = mock_listing_repo.add_or_update.call_args
     assert len(call_args) == 1
@@ -263,5 +292,6 @@ def test_list_item_success_repo_save_fails(listing_service, mock_product_repo, m
     assert listing_arg.marketplace_name == marketplace_name
     assert listing_arg.marketplace_listing_id == expected_listing_id
     assert listing_arg.status == "active"
+
 
 # --- We will add more tests below for other scenarios ---

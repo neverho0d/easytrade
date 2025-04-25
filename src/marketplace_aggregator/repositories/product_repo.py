@@ -10,6 +10,7 @@ from ..models.variable_product import VariableProduct
 # Define a type alias for the items our repository might store or return
 ProductData = Sellable | VariableProduct
 
+
 class ProductRepository(ABC):
     """
     Interface defining operations for storing and retrieving product data
@@ -42,11 +43,13 @@ class ProductRepository(ABC):
 
 # --- In-Memory Implementation ---
 
+
 class InMemoryProductRepository(ProductRepository):
     """
     An in-memory implementation of the ProductRepository for development/testing.
     Uses a dictionary for storage.
     """
+
     def __init__(self):
         # Store items using SKU or group_id as the key
         self._products: Dict[str, ProductData] = {}
@@ -56,41 +59,40 @@ class InMemoryProductRepository(ProductRepository):
         # Determine the key (SKU or group_id)
         identifier = None
         if isinstance(product_data, Sellable):
-             identifier = product_data.sku
+            identifier = product_data.sku
         elif isinstance(product_data, VariableProduct):
-             identifier = product_data.group_id
+            identifier = product_data.group_id
         else:
-             raise TypeError("Unsupported type for repository")
+            raise TypeError("Unsupported type for repository")
 
         if not identifier:
-             raise ValueError("Product data must have a valid identifier (SKU or group_id)")
+            raise ValueError(
+                "Product data must have a valid identifier (SKU or group_id)"
+            )
 
         print(f"Repo: Adding/Updating product with ID '{identifier}'")
         self._products[identifier] = product_data
-
 
     def get(self, identifier: str) -> Optional[ProductData]:
         # Retrieve by key
         print(f"Repo: Getting product with ID '{identifier}'")
         return self._products.get(identifier)
 
-
     def list_all(self) -> List[ProductData]:
         # Return all stored items
         print(f"Repo: Listing all ({len(self._products)}) products.")
         return list(self._products.values())
 
-
     def remove(self, identifier: str) -> bool:
         # Remove item by key
         print(f"Repo: Attempting to remove product with ID '{identifier}'")
         if identifier in self._products:
-             del self._products[identifier]
-             print(f"Repo: Removed product '{identifier}'")
-             return True
+            del self._products[identifier]
+            print(f"Repo: Removed product '{identifier}'")
+            return True
         else:
-             print(f"Repo: Product '{identifier}' not found for removal.")
-             return False
+            print(f"Repo: Product '{identifier}' not found for removal.")
+            return False
 
 
 # --- Example (Conceptual) Usage in a Service ---

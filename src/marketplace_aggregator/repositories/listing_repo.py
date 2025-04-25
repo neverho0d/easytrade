@@ -6,7 +6,8 @@ from typing import List, Dict, Tuple, Optional
 # Use relative imports
 from ..models.listing import Listing
 
-ListingKey = Tuple[str, str] # Type alias for (marketplace_name, listing_id)
+ListingKey = Tuple[str, str]  # Type alias for (marketplace_name, listing_id)
+
 
 class ListingRepository(ABC):
     """
@@ -41,11 +42,13 @@ class ListingRepository(ABC):
 
 # --- In-Memory Implementation ---
 
+
 class InMemoryListingRepository(ListingRepository):
     """
     An in-memory implementation of the ListingRepository.
     Uses a dictionary keyed by (marketplace_name, marketplace_listing_id).
     """
+
     def __init__(self):
         # Key: Tuple(marketplace_name, marketplace_listing_id)
         # Value: Listing object
@@ -58,7 +61,6 @@ class InMemoryListingRepository(ListingRepository):
         print(f"Repo: Adding/Updating listing with key '{key}'")
         self._listings[key] = listing
 
-
     def get(self, marketplace_name: str, listing_id: str) -> Optional[Listing]:
         # Retrieve by composite key
         key: ListingKey = (marketplace_name, listing_id)
@@ -69,15 +71,14 @@ class InMemoryListingRepository(ListingRepository):
         # Iterate through values to find matches
         print(f"Repo: Getting listings for product identifier '{product_identifier}'")
         return [
-            listing for listing in self._listings.values()
+            listing
+            for listing in self._listings.values()
             if listing.product_identifier == product_identifier
         ]
-
 
     def list_all(self) -> List[Listing]:
         print(f"Repo: Listing all ({len(self._listings)}) listings.")
         return list(self._listings.values())
-
 
     def remove(self, marketplace_name: str, listing_id: str) -> bool:
         # Remove item by composite key

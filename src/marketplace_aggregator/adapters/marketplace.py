@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List, Dict, Any # Using Any for now for generic order/config dicts
+from typing import List, Dict, Any  # Using Any for now for generic order/config dicts
 
 # Import our core model - use relative import within the package
 from ..models.product import Sellable
@@ -92,15 +92,21 @@ class Marketplace(ABC):
         """
         pass
 
+
 # --- Define custom Exceptions (optional but good practice) ---
 class MarketplaceError(Exception):
     """Base exception for marketplace interactions."""
+
     pass
+
 
 class ListingError(MarketplaceError):
     """Exception related to listing operations."""
+
     pass
+
 
 class OrderError(MarketplaceError):
     """Exception related to order operations."""
+
     pass
