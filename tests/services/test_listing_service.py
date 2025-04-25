@@ -293,5 +293,218 @@ def test_list_item_success_repo_save_fails(
     assert listing_arg.marketplace_listing_id == expected_listing_id
     assert listing_arg.status == "active"
 
+def test_update_price_success(listing_service, mock_marketplace_adapter):
+    """Test successful price update call."""
+    # Arrange
+    listing_id = "MOCK-LISTING-123"
+    marketplace_name = mock_marketplace_adapter.name # Use name from mock
+    sku = "TEST-SKU-01"
+    new_price = 99.99
 
-# --- We will add more tests below for other scenarios ---
+    # Configure mock adapter method (no return value, no exception)
+    # We don't need to configure return_value=None explicitly for methods returning None
+    # We also don't need side_effect if no exception is raised.
+    # We DO need to ensure the mock object itself exists and is passed via fixture.
+
+    # Act
+    success = listing_service.update_price_on_marketplace(
+        listing_id=listing_id,
+        marketplace_name=marketplace_name,
+        sku=sku,
+        new_price=new_price
+    )
+
+    # Assert
+    # 1. Check return value is True
+    assert success is True
+
+    # 2. Verify the adapter's update_listing_price method was called correctly
+    mock_marketplace_adapter.update_listing_price.assert_called_once_with(
+        listing_id, sku, new_price
+    )
+
+def test_update_price_marketplace_not_found(listing_service, mock_marketplace_adapter):
+    """Test price update when marketplace is not found."""
+    # Arrange
+    listing_id = "MOCK-LISTING-123"
+    marketplace_name = "NonExistentPlace"
+    sku = "TEST-SKU-01"
+    new_price = 99.99
+
+    # Act
+    success = listing_service.update_price_on_marketplace(
+        listing_id=listing_id,
+        marketplace_name=marketplace_name,
+        sku=sku,
+        new_price=new_price
+    )
+
+    # Assert
+    # 1. Check return value is False
+    assert success is False 
+    # 2. Verify the adapter's update_listing_price method was not called
+    mock_marketplace_adapter.update_listing_price.assert_not_called()
+
+def test_update_price_listing_error(listing_service, mock_marketplace_adapter):
+    """Test price update when listing ID is not found."""
+    # Arrange
+    listing_id = "NON-EXISTING-LISTING"
+    marketplace_name = mock_marketplace_adapter.name
+    sku = "TEST-SKU-01"
+    new_price = 99.99
+
+    # Configure mock adapter to raise ListingError
+    mock_marketplace_adapter.update_listing_price.side_effect = ListingError("Mocked listing error")
+
+    # Act
+    success = listing_service.update_price_on_marketplace(
+        listing_id=listing_id,
+        marketplace_name=marketplace_name,
+        sku=sku,
+        new_price=new_price
+    )
+
+    # Assert
+    # 1. Check return value is False
+    assert success is False
+
+    # 2. Verify the adapter's update_listing_price method was called and raised an error
+    mock_marketplace_adapter.update_listing_price.assert_called_once_with(
+        listing_id, sku, new_price
+    )
+
+
+def test_update_price_other_exception(listing_service, mock_marketplace_adapter):
+    """Test price update when other exception is raised."""
+    # Arrange
+    listing_id = "MOCK-LISTING-123"
+    marketplace_name = mock_marketplace_adapter.name
+    sku = "TEST-SKU-01"
+    new_price = 99.99
+
+    # Configure mock adapter to raise unexpected Exception
+    mock_marketplace_adapter.update_listing_price.side_effect = Exception("Mocked unexpected error")
+
+    # Act
+    success = listing_service.update_price_on_marketplace(
+        listing_id=listing_id,
+        marketplace_name=marketplace_name,
+        sku=sku,
+        new_price=new_price
+    )
+
+    # Assert
+    # 1. Check return value is False
+    assert success is False
+
+    # 2. Verify the adapter's update_listing_price method was called and raised an error
+    mock_marketplace_adapter.update_listing_price.assert_called_once_with(
+        listing_id, sku, new_price
+    )
+
+# --- Tests for update_stock_on_marketplace ---
+def test_update_stock_success(listing_service, mock_marketplace_adapter):
+    """Test successful stock update call."""
+    # Arrange
+    listing_id = "MOCK-LISTING-123"
+    marketplace_name = mock_marketplace_adapter.name
+    sku = "TEST-SKU-01"
+    stock_update = {sku: 10}
+
+    # Configure mock adapter method (no return value, no exception)
+    # We don't need to configure return_value=None explicitly for methods returning None
+    # We also don't need side_effect if no exception is raised.
+    # We DO need to ensure the mock object itself exists and is passed via fixture.
+
+    # Act
+    success = listing_service.update_stock_on_marketplace(
+        listing_id=listing_id,
+        marketplace_name=marketplace_name,
+        sku_stock=stock_update
+    )
+
+    # Assert
+    # 1. Check return value is True
+    assert success is True
+
+    # 2. Verify the adapter's update_listing_stock method was called correctly
+    mock_marketplace_adapter.update_listing_stock.assert_called_once_with(
+        listing_id, stock_update
+    )
+
+def test_update_stock_marketplace_not_found(listing_service, mock_marketplace_adapter):
+    """Test stock update when marketplace is not found."""
+    # Arrange
+    listing_id = "MOCK-LISTING-123"
+    marketplace_name = "NonExistentPlace"
+    sku = "TEST-SKU-01"
+    stock_update = {sku: 10}
+
+    # Act
+    success = listing_service.update_stock_on_marketplace(
+        listing_id=listing_id,
+        marketplace_name=marketplace_name,
+        sku_stock=stock_update
+    )
+
+    # Assert
+    # 1. Check return value is False
+    assert success is False
+
+    # 2. Verify the adapter's update_listing_stock method was not called
+    mock_marketplace_adapter.update_listing_stock.assert_not_called()
+
+def test_update_stock_listing_error(listing_service, mock_marketplace_adapter):
+    """Test stock update when listing ID is not found."""
+    # Arrange
+    listing_id = "NON-EXISTING-LISTING"
+    marketplace_name = mock_marketplace_adapter.name
+    sku = "TEST-SKU-01"
+    stock_update = {sku: 10}
+
+    # Configure mock adapter to raise ListingError
+    mock_marketplace_adapter.update_listing_stock.side_effect = ListingError("Mocked listing error")
+
+    # Act
+    success = listing_service.update_stock_on_marketplace(
+        listing_id=listing_id,
+        marketplace_name=marketplace_name,
+        sku_stock=stock_update
+    )
+
+    # Assert
+    # 1. Check return value is False
+    assert success is False
+
+    # 2. Verify the adapter's update_listing_stock method was called and raised an error
+    mock_marketplace_adapter.update_listing_stock.assert_called_once_with(
+        listing_id, stock_update
+    )
+
+def test_update_stock_other_exception(listing_service, mock_marketplace_adapter):
+    """Test stock update when other exception is raised."""
+    # Arrange
+    listing_id = "MOCK-LISTING-123"
+    marketplace_name = mock_marketplace_adapter.name
+    sku = "TEST-SKU-01"
+    stock_update = {sku: 10}
+
+    # Configure mock adapter to raise unexpected Exception
+    mock_marketplace_adapter.update_listing_stock.side_effect = Exception("Mocked unexpected error")
+
+    # Act
+    success = listing_service.update_stock_on_marketplace(
+        listing_id=listing_id,
+        marketplace_name=marketplace_name,
+        sku_stock=stock_update
+    )
+
+    # Assert
+    # 1. Check return value is False
+    assert success is False
+
+    # 2. Verify the adapter's update_listing_stock method was called and raised an error
+    mock_marketplace_adapter.update_listing_stock.assert_called_once_with(
+        listing_id, stock_update
+    )
+
