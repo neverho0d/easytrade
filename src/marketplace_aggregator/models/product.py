@@ -136,7 +136,8 @@ class Assembly(SQLModel, Sellable, table=True):
     Represents a product composed of other Sellable items (Composite).
     Implements the Sellable interface itself.
     """
-    id: Optional[int] = Field(default=None, primary_key=True) # Primary Key
+
+    id: Optional[int] = Field(default=None, primary_key=True)  # Primary Key
     sku: str = Field(unique=True, index=True)
     title: str = Field(index=True)
     description: Optional[str] = Field(default=None)
@@ -150,8 +151,10 @@ class Assembly(SQLModel, Sellable, table=True):
         # This logic belongs in a Service layer using repositories, not the model.
         # For now, return 0 or perhaps store a pre-calculated price?
         # Let's return 0 and add a TODO.
-        print(f"Warning: Assembly.get_price() needs service layer logic to sum component prices.")
-        return 0.0 # TODO: Implement price calculation in a service layer
+        print(
+            "Warning: Assembly.get_price() needs service layer logic to sum component prices."
+        )
+        return 0.0  # TODO: Implement price calculation in a service layer
 
     def get_description(self) -> str | None:
         # Return the assembly's own description

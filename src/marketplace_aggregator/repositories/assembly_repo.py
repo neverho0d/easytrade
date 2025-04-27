@@ -7,6 +7,7 @@ from ..models.product import Assembly
 
 class AssemblyRepository(SQLAlchemyAsyncRepository[Assembly]):
     """Repository for Assembly data."""
+
     model_type = Assembly
     # Add custom query methods here later if needed
 

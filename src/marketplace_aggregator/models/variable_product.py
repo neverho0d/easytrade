@@ -1,6 +1,5 @@
 # src/marketplace_aggregator/models/variable_product.py
 
-from dataclasses import dataclass, field
 from typing import List, Optional, Self
 
 from sqlalchemy import Column
@@ -22,7 +21,7 @@ from marketplace_aggregator.models.product import (
 class VariableProduct(SQLModel, table=True):
     """Groups related Sellable variants and holds shared info."""
 
-    id: Optional[int] = Field(default=None, primary_key=True) # Primary Key
+    id: Optional[int] = Field(default=None, primary_key=True)  # Primary Key
     group_id: str = Field(unique=True, index=True)  # E.g., "TSHIRT-COTTON"
     title: str = Field(index=True)  # E.g., "Cotton T-Shirt" (the shared name)
     description: Optional[str] = Field(default=None)

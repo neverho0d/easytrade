@@ -14,6 +14,7 @@ asyncpg = "^0.30.0"
 python-dotenv = "^1.1.0"
 litestar = {extras = ["standard"], version = "^2.15.2"}
 advanced-alchemy = "^1.3.2"
+pytest-mock = "^3.14.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1.1"   # Or latest stable version

@@ -7,6 +7,7 @@ from ..models.product import ServiceProduct
 
 class ServiceProductRepository(SQLAlchemyAsyncRepository[ServiceProduct]):
     """Repository for ServiceProduct data."""
+
     model_type = ServiceProduct
 
     async def get_by_sku(self, sku: str) -> Optional[ServiceProduct]:

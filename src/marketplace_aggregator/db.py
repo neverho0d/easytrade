@@ -46,8 +46,8 @@ if __name__ == "__main__":
     print("Attempting to create database tables...")
     # Need to import models for metadata registration
     from marketplace_aggregator.models import product  # noqa
-    from marketplace_aggregator.models import variable_product # noqa
-    from marketplace_aggregator.models import promotional_rule # noqa
+    from marketplace_aggregator.models import variable_product  # noqa
+    from marketplace_aggregator.models import promotional_rule  # noqa
     from marketplace_aggregator.models import listing  # noqa
 
     asyncio.run(create_db_and_tables())

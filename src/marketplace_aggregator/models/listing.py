@@ -203,9 +203,9 @@ class Listing(SQLModel, table=True):
     product_identifier: str = Field(index=True)
     rule_id: Optional[int] = Field(
         default=None,
-        foreign_key="promotionalrule.id", # Assuming table name 'promotionalrule'
+        foreign_key="promotionalrule.id",  # Assuming table name 'promotionalrule'
         index=True,
-        nullable=True # Make it optional in case a listing could exist without a rule? Or make non-nullable? Let's start nullable.
+        nullable=True,  # Make it optional in case a listing could exist without a rule? Or make non-nullable? Let's start nullable.
     )
     marketplace_name: str = Field(
         index=True
@@ -248,7 +248,7 @@ class Listing(SQLModel, table=True):
         # Get the appropriate class from the map, default to ErrorState if status is unknown
         if not self.id:
             self.status = "pending"
-        
+
         state_class = state_map.get(self.status.lower(), ErrorState)
         self._state = state_class(self)  # Pass self (the Listing instance) to the state
 

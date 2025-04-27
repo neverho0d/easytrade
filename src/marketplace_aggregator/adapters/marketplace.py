@@ -2,7 +2,12 @@
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List, Dict, Any, Optional  # Using Any for now for generic order/config dicts
+from typing import (
+    List,
+    Dict,
+    Any,
+    Optional,
+)  # Using Any for now for generic order/config dicts
 
 # Import our core model - use relative import within the package
 from ..models.product import Sellable
@@ -26,7 +31,7 @@ class Marketplace(ABC):
     async def submit_listing(
         self,
         item: Sellable | VariableProduct,
-        listing_config: Optional[Dict[str, Any]] = None
+        listing_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Submits a Sellable item as a new listing on the marketplace.
@@ -46,7 +51,9 @@ class Marketplace(ABC):
         pass
 
     @abstractmethod
-    async def update_listing_price(self, listing_id: str, sku: str, new_price: float) -> None:
+    async def update_listing_price(
+        self, listing_id: str, sku: str, new_price: float
+    ) -> None:
         """
         Updates the price for a specific SKU within a listing on the marketplace.
 
@@ -62,7 +69,9 @@ class Marketplace(ABC):
         pass
 
     @abstractmethod
-    async def update_listing_stock(self, listing_id: str, sku_stock: Dict[str, int]) -> None:
+    async def update_listing_stock(
+        self, listing_id: str, sku_stock: Dict[str, int]
+    ) -> None:
         """
         Updates the stock levels for one or more SKUs within a listing.
 

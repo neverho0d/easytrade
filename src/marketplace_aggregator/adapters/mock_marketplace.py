@@ -40,7 +40,7 @@ class MockMarketplace(Marketplace):
     async def submit_listing(
         self,
         item: Sellable | VariableProduct,
-        listing_config: Optional[Dict[str, Any]] = None
+        listing_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Simulates submitting a listing. Generates a fake ID.
@@ -64,7 +64,9 @@ class MockMarketplace(Marketplace):
         )
         return listing_id
 
-    async def update_listing_price(self, listing_id: str, sku: str, new_price: float) -> None:
+    async def update_listing_price(
+        self, listing_id: str, sku: str, new_price: float
+    ) -> None:
         """Simulates updating a price. Just prints for the mock."""
         print(f"{self.name} ({self._seller_id}): Received update_listing_price")
 
@@ -94,7 +96,9 @@ class MockMarketplace(Marketplace):
         # Optional: Store override price in mock_listing.price_overrides[sku] = new_price
         listing.price_overrides[sku] = new_price
 
-    async def update_listing_stock(self, listing_id: str, sku_stock: Dict[str, int]) -> None:
+    async def update_listing_stock(
+        self, listing_id: str, sku_stock: Dict[str, int]
+    ) -> None:
         """Simulates updating stock levels stored within the mock listing."""
         print(
             f"MockPlace ({self._seller_id}): Received update_listing_stock for {listing_id}"

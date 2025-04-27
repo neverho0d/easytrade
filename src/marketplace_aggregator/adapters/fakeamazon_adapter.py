@@ -4,7 +4,6 @@ import asyncio
 from typing import Dict, Any, List, Optional, TypedDict
 from datetime import datetime
 import uuid
-import time  # For potential simulation
 
 # Use relative imports
 from .marketplace import Marketplace, ListingError
@@ -65,7 +64,7 @@ class FakemazonAdapter(Marketplace):
     async def submit_listing(
         self,
         item: Sellable | VariableProduct,
-        listing_config: Optional[Dict[str, Any]] = None
+        listing_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Translates our internal product model to a fake Amazon API structure
@@ -154,7 +153,9 @@ class FakemazonAdapter(Marketplace):
         print(f"FakemazonAdapter: Submission successful. Listing ID: {listing_id}")
         return listing_id
 
-    def listing_config(self, api_payload: FakemazonApiPayload, listing_config: Dict[str, Any]) -> FakemazonApiPayload:
+    def listing_config(
+        self, api_payload: FakemazonApiPayload, listing_config: Dict[str, Any]
+    ) -> FakemazonApiPayload:
         """
         Apply promotional rule to the API payload.
         """
@@ -166,7 +167,9 @@ class FakemazonAdapter(Marketplace):
 
     # --- Implement other methods (Simplified for Mock) ---
 
-    async def update_listing_price(self, listing_id: str, sku: str, new_price: float) -> None:
+    async def update_listing_price(
+        self, listing_id: str, sku: str, new_price: float
+    ) -> None:
         print(
             f"\nFakemazonAdapter: Received update_price for {listing_id}, SKU {sku} to {new_price:.2f}"
         )
@@ -186,7 +189,9 @@ class FakemazonAdapter(Marketplace):
             self._api_listings[listing_id]["price"] = new_price
         print(f"FakemazonAdapter: Price update acknowledged for {listing_id}/{sku}.")
 
-    async def update_listing_stock(self, listing_id: str, sku_stock: Dict[str, int]) -> None:
+    async def update_listing_stock(
+        self, listing_id: str, sku_stock: Dict[str, int]
+    ) -> None:
         print(
             f"\nFakemazonAdapter: Received update_stock for {listing_id}: {sku_stock}"
         )

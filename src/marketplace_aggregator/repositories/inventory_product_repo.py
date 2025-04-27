@@ -7,6 +7,7 @@ from ..models.product import InventoryProduct
 
 class InventoryProductRepository(SQLAlchemyAsyncRepository[InventoryProduct]):
     """Repository for InventoryProduct data."""
+
     model_type = InventoryProduct
     # Add custom query methods here later if needed
 

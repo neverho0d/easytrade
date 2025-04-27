@@ -6,8 +6,10 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 # Use relative imports
 from ..models.promotional_rule import PromotionalRule
 
+
 class PromotionalRuleRepository(SQLAlchemyAsyncRepository[PromotionalRule]):
     """Repository for PromotionalRule data."""
+
     model_type = PromotionalRule
 
     # --- Add custom query methods as needed ---
@@ -16,10 +18,7 @@ class PromotionalRuleRepository(SQLAlchemyAsyncRepository[PromotionalRule]):
         self, product_identifier: str
     ) -> List[PromotionalRule]:
         """Find all active rules for a given product identifier."""
-        return await self.list(
-            product_identifier=product_identifier,
-            is_active=True
-        )
+        return await self.list(product_identifier=product_identifier, is_active=True)
 
     async def find_active_rule_for_marketplace(
         self, product_identifier: str, marketplace_name: str
@@ -28,7 +27,7 @@ class PromotionalRuleRepository(SQLAlchemyAsyncRepository[PromotionalRule]):
         return await self.get_one_or_none(
             product_identifier=product_identifier,
             marketplace_name=marketplace_name,
-            is_active=True
+            is_active=True,
         )
 
     # Add other specific finders later (e.g., list all active rules)

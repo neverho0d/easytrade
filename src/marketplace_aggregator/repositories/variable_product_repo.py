@@ -7,6 +7,7 @@ from ..models.variable_product import VariableProduct
 
 class VariableProductRepository(SQLAlchemyAsyncRepository[VariableProduct]):
     """Repository for VariableProduct group data."""
+
     model_type = VariableProduct
     # Add custom query methods here later if needed
 
