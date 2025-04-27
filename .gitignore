@@ -18,3 +18,9 @@ __pycache__/
 
 # we have to ignore the coverage html directory
 .coverage.html/
+
+# we have to ignore the postgres data directory
+postgres_data/
+
+# we have to ignore the .env file
+.env

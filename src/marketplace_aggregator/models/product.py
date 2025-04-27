@@ -1,8 +1,11 @@
 # src/marketplace_aggregator/models/product.py
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import List, TypeAlias
+from typing import List, Optional, TypeAlias
+
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlmodel import Field, SQLModel
 
 # Optional: Define helper aliases
 Dimensions: TypeAlias = tuple[float, float, float]  # L, W, H
@@ -18,15 +21,13 @@ class Sellable(ABC):
     """
 
     # We make sku and name abstract properties - subclasses must provide them
-    @property
     @abstractmethod
-    def sku(self) -> str:
+    def get_sku(self) -> str:
         """The unique Stock Keeping Unit."""
         pass
 
-    @property
     @abstractmethod
-    def title(self) -> str:
+    def get_title(self) -> str:
         """The display title of the sellable item."""
         pass
 
@@ -57,170 +58,109 @@ def process_sellable(item: Sellable):
 
 # --- 2. Concrete Leaf: Inventory Product ---
 # Represents a specific, trackable product variant
-@dataclass
-class InventoryProduct(Sellable):
+class InventoryProduct(SQLModel, Sellable, table=True):
     """A specific, physical product variant with inventory."""
 
-    _sku: str
-    _title: str
-    _price: float
-    attributes: VariantAttributes = field(default_factory=dict)
-    description: str | None = None
-    images: list[str] = field(default_factory=list)
-    weight_kg: float | None = None
-    dimensions_cm: Dimensions | None = None
+    id: Optional[int] = Field(default=None, primary_key=True)
+    sku: str = Field(unique=True, index=True)
+    title: str = Field(index=True)
+    price: float = Field(ge=0.0)
+    attributes: Optional[VariantAttributes] = Field(
+        default=None, sa_column=Column(JSONB)
+    )
+    description: Optional[str] = Field(default=None)
+    images: Optional[List[str]] = Field(default=None, sa_column=Column(JSONB))
+    weight_kg: Optional[float] = Field(default=None)
+    dimensions_cm: Optional[Dimensions] = Field(default=None, sa_column=Column(JSONB))
 
     # --- Implement Sellable interface ---
 
-    @property
-    def sku(self) -> str:
-        return self._sku
+    def get_sku(self) -> str:
+        return self.sku
 
-    @property
-    def title(self) -> str:
-        return self._title
-
-    @property
-    def price(self) -> float:
-        return self._price
+    def get_title(self) -> str:
+        return self.title
 
     def get_price(self) -> float:
-        return self._price
+        return self.price
 
     def get_description(self) -> str | None:
         return self.description  # Accessing dataclass field directly
 
     def get_images(self) -> list[str]:
-        return self.images  # Accessing dataclass field directly
+        return self.images or []  # Accessing dataclass field directly
 
     # InventoryProduct specific methods could go here later
 
 
 # --- 3. Concrete Leaf: Service Product ---
 # Represents a non-physical service
-@dataclass
-class ServiceProduct(Sellable):
+class ServiceProduct(SQLModel, Sellable, table=True):
     """A sellable service."""
 
-    _sku: str
-    _title: str
-    _price: float  # Could be price per hour, fixed price, etc.
-    description: str | None = None
-    images: list[str] | None = field(default_factory=list)  # e.g., promotional images
-    duration_hours: float | None = None  # Example service-specific attribute
+    id: Optional[int] = Field(default=None, primary_key=True)
+    sku: str = Field(unique=True, index=True)
+    title: str = Field(index=True)
+    price: float = Field(ge=0.0)  # Could be price per hour, fixed price, etc.
+    description: Optional[str] = Field(default=None)
+    images: Optional[List[str]] = Field(
+        default=None, sa_column=Column(JSONB)
+    )  # e.g., promotional images
+    duration_hours: Optional[float] = Field(
+        default=None
+    )  # Example service-specific attribute
 
     # --- Implement Sellable interface ---
 
-    @property
-    def sku(self) -> str:
-        return self._sku
+    def get_sku(self) -> str:
+        return self.sku
 
-    @property
-    def title(self) -> str:
-        return self._title
-
-    @property
-    def price(self) -> float:
-        return self._price
+    def get_title(self) -> str:
+        return self.title
 
     def get_price(self) -> float:
-        return self._price
+        return self.price
 
     def get_description(self) -> str | None:
         return self.description
 
     def get_images(self) -> list[str] | None:
-        return self.images
+        return self.images or []
 
     # ServiceProduct specific methods could go here later
 
 
 # --- 4. Composite: Assembly ---
-class Assembly(Sellable):
+class Assembly(SQLModel, Sellable, table=True):
     """
     Represents a product composed of other Sellable items (Composite).
     Implements the Sellable interface itself.
     """
-
-    def __init__(
-        self,
-        sku: str,
-        title: str,
-        description: str | None = None,
-        images: list[str] | None = None,
-    ):
-        # Store the Assembly's own details
-        self._sku = sku
-        self._title = title
-        self._description = description
-        # Use provided images or default to empty list
-        self._images = images if images is not None else []
-        # Initialize the list to hold child components
-        self._components: List[Sellable] = []
-        print(f"Assembly created: {self.title} ({self.sku})")
-
-    # --- Child Management Methods ---
-    def add_component(self, component: Sellable) -> None:
-        """Adds a child component (part) to the assembly."""
-        print(f"  Adding component '{component.title}' to assembly '{self.title}'")
-        self._components.append(component)
-
-    def remove_component(self, component: Sellable) -> None:
-        """Removes a child component from the assembly."""
-        print(
-            f"  Attempting to remove component '{component.title}' from assembly '{self.title}'"
-        )
-        try:
-            self._components.remove(component)
-            print("  Successfully removed.")
-        except ValueError:
-            print("  Component not found.")
+    id: Optional[int] = Field(default=None, primary_key=True) # Primary Key
+    sku: str = Field(unique=True, index=True)
+    title: str = Field(index=True)
+    description: Optional[str] = Field(default=None)
+    images: Optional[List[str]] = Field(default=None, sa_column=Column(JSONB))
+    component_skus: Optional[List[str]] = Field(default=None, sa_column=Column(JSONB))
 
     # --- Implement Sellable interface for the Assembly itself ---
-    @property
-    def sku(self) -> str:
-        # Return the assembly's own SKU
-        return self._sku
-
-    @property
-    def title(self) -> str:
-        # Return the assembly's own title
-        return self._title
 
     def get_price(self) -> float:
-        # Composite logic: Calculate price by summing the prices
-        # of all child components recursively.
-        # Assembly fee is a ServiceProduct that is added to the list of components, so its price is included.
-        return sum(component.get_price() for component in self._components)
+        # Price calculation now requires fetching components based on SKUs.
+        # This logic belongs in a Service layer using repositories, not the model.
+        # For now, return 0 or perhaps store a pre-calculated price?
+        # Let's return 0 and add a TODO.
+        print(f"Warning: Assembly.get_price() needs service layer logic to sum component prices.")
+        return 0.0 # TODO: Implement price calculation in a service layer
 
     def get_description(self) -> str | None:
         # Return the assembly's own description
-        return self._description
+        return self.description
 
     def get_images(self) -> list[str]:
         # Return the assembly's specific images (representing the assembled product)
         # Could potentially combine child images later if needed, but keep simple for now.
-        return self._images
-
-    # --- Optional: Composite-specific display method (similar to previous example) ---
-    def display_structure(self, indent_level: int = 0) -> None:
-        """Displays the assembly and its components recursively."""
-        indent = "  " * indent_level
-        print(
-            f"{indent}* Assembly: {self.title} (SKU: {self.sku}) - Composite Price: ${self.get_price():.2f}"
-        )
-        for component in self._components:
-            # Check if the child component has a 'display_structure' method itself
-            if hasattr(component, "display_structure") and callable(
-                component.display_structure
-            ):
-                component.display_structure(indent_level + 1)
-            else:
-                # If child is a leaf (Product/Service), maybe just print basic info
-                indent_child = "  " * (indent_level + 1)
-                print(
-                    f"{indent_child}- Leaf: {component.title} ({component.sku}) - Price: ${component.get_price():.2f}"
-                )
+        return self.images or []
 
 
 # --- Example Usage ---
@@ -230,17 +170,17 @@ if __name__ == "__main__":
 
     # Create concrete instances
     variant1 = InventoryProduct(
-        _sku="TS-RD-M",
-        _title="Cotton T-Shirt (Red, M)",
-        _price=19.99,
+        sku="TS-RD-M",
+        title="Cotton T-Shirt (Red, M)",
+        price=19.99,
         attributes={"Color": "Red", "Size": "M"},
         weight_kg=0.2,
     )
 
     service1 = ServiceProduct(
-        _sku="SVC-SETUP-01",
-        _title="Basic Setup Service",
-        _price=99.00,
+        sku="SVC-SETUP-01",
+        title="Basic Setup Service",
+        price=99.00,
         description="One hour remote setup assistance.",
         duration_hours=1.0,
     )
@@ -257,41 +197,41 @@ if __name__ == "__main__":
     process_sellable(variant1)
     process_sellable(service1)
 
-    print("\n--- Creating Assembly ---")
-    # Create some components (could be InventoryProduct, ServiceProduct, or other Assemblies)
-    desk_legs = InventoryProduct(
-        _sku="LEG-STL-4", _title="Steel Legs (Set of 4)", _price=40.00
-    )
-    desk_top_oak = InventoryProduct(
-        _sku="TOP-OAK-120", _title="Oak Desktop (120cm)", _price=75.00
-    )
-    assembly_service = ServiceProduct(
-        _sku="SVC-ASM-DESK", _title="Desk Assembly Service", _price=50.00
-    )
+    # print("\n--- Creating Assembly ---")
+    # # Create some components (could be InventoryProduct, ServiceProduct, or other Assemblies)
+    # desk_legs = InventoryProduct(
+    #     sku="LEG-STL-4", title="Steel Legs (Set of 4)", price=40.00
+    # )
+    # desk_top_oak = InventoryProduct(
+    #     sku="TOP-OAK-120", title="Oak Desktop (120cm)", price=75.00
+    # )
+    # assembly_service = ServiceProduct(
+    #     sku="SVC-ASM-DESK", title="Desk Assembly Service", price=50.00
+    # )
 
-    # Create the main assembly product
-    oak_desk_assembly = Assembly(
-        sku="DESK-OAK-STD",
-        title="Standard Oak Desk",
-        description="A sturdy desk with an oak top and steel legs.",
-        images=["oak_desk_main.jpg"],
-    )
+    # # Create the main assembly product
+    # oak_desk_assembly = Assembly(
+    #     sku="DESK-OAK-STD",
+    #     title="Standard Oak Desk",
+    #     description="A sturdy desk with an oak top and steel legs.",
+    #     images=["oak_desk_main.jpg"],
+    # )
 
-    # Add components to the assembly
-    oak_desk_assembly.add_component(desk_legs)
-    oak_desk_assembly.add_component(desk_top_oak)
-    oak_desk_assembly.add_component(assembly_service)  # Include service as part!
+    # # Add components to the assembly
+    # oak_desk_assembly.add_component(desk_legs)
+    # oak_desk_assembly.add_component(desk_top_oak)
+    # oak_desk_assembly.add_component(assembly_service)  # Include service as part!
 
-    print("\n--- Displaying Assembly Structure ---")
-    oak_desk_assembly.display_structure()
+    # print("\n--- Displaying Assembly Structure ---")
+    # oak_desk_assembly.display_structure()
 
-    print("\n--- Getting Assembly Details via Sellable Interface ---")
-    print(f"SKU: {oak_desk_assembly.sku}")
-    print(f"Title: {oak_desk_assembly.title}")
-    print(f"Description: {oak_desk_assembly.get_description()}")
-    print(f"Images: {oak_desk_assembly.get_images()}")
-    print(f"Total Price (sum of components): ${oak_desk_assembly.get_price():.2f}")
+    # print("\n--- Getting Assembly Details via Sellable Interface ---")
+    # print(f"SKU: {oak_desk_assembly.sku}")
+    # print(f"Title: {oak_desk_assembly.title}")
+    # print(f"Description: {oak_desk_assembly.get_description()}")
+    # print(f"Images: {oak_desk_assembly.get_images()}")
+    # print(f"Total Price (sum of components): ${oak_desk_assembly.get_price():.2f}")
 
-    # Demonstrate treating assembly just like any other Sellable
-    print("\n--- Processing Assembly via Sellable interface ---")
-    process_sellable(oak_desk_assembly)
+    # # Demonstrate treating assembly just like any other Sellable
+    # print("\n--- Processing Assembly via Sellable interface ---")
+    # process_sellable(oak_desk_assembly)

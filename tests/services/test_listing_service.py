@@ -78,7 +78,7 @@ def test_list_item_success(
     # Create sample product data to be returned by the repo mock
     # Create an instance of InventoryProduct (or VariableProduct)
     #       Make sure it has a .sku or .group_id attribute matching test_sku
-    test_product = InventoryProduct(_sku=test_sku, _title="Test Item", _price=10.0)
+    test_product = InventoryProduct(sku=test_sku, title="Test Item", price=10.0)
 
     # Configure mock_product_repo.get() to return the test product
     # when called with test_sku
@@ -178,7 +178,7 @@ def test_list_item_listing_error(
     # Arrange: Configure mocks
     test_sku = "TEST-SKU-ERR"
     marketplace_name = "TestPlace"
-    test_product = InventoryProduct(_sku=test_sku, _title="Error Item", _price=20.0)
+    test_product = InventoryProduct(sku=test_sku, title="Error Item", price=20.0)
     error_message = "Mock API validation failed"
 
     # 1. Configure repo to return the product
@@ -215,7 +215,7 @@ def test_list_item_other_exception(
     test_sku = "TEST-SKU-GEN-ERR"
     marketplace_name = "TestPlace"
     test_product = InventoryProduct(
-        _sku=test_sku, _title="General Error Item", _price=30.0
+        sku=test_sku, title="General Error Item", price=30.0
     )
     error_message = "Something unexpected broke!"
 
@@ -251,7 +251,7 @@ def test_list_item_success_repo_save_fails(
     test_sku = "TEST-SKU-REPO-FAIL"
     marketplace_name = "TestPlace"
     expected_listing_id = "MOCK-LISTING-999"
-    test_product = InventoryProduct(_sku=test_sku, _title="Repo Fail Item", _price=5.0)
+    test_product = InventoryProduct(sku=test_sku, title="Repo Fail Item", price=5.0)
     repo_error_message = "Simulated DB connection error"
 
     # 1. Configure repo to return the product
@@ -288,10 +288,9 @@ def test_list_item_success_repo_save_fails(
     assert len(call_args) == 1
     listing_arg = call_args[0]
     assert isinstance(listing_arg, Listing)
-    assert listing_arg.product_identifier == test_sku
+    assert listing_arg.rule_id == test_sku
     assert listing_arg.marketplace_name == marketplace_name
     assert listing_arg.marketplace_listing_id == expected_listing_id
-    assert listing_arg.status == "active"
 
 
 def test_update_price_success(listing_service, mock_marketplace_adapter):

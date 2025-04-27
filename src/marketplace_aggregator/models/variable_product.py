@@ -1,7 +1,11 @@
 # src/marketplace_aggregator/models/variable_product.py
 
 from dataclasses import dataclass, field
-from typing import Self
+from typing import List, Optional, Self
+
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlmodel import Field, SQLModel
 
 from marketplace_aggregator.models.product import (
     Assembly,
@@ -15,54 +19,51 @@ from marketplace_aggregator.models.product import (
 
 # --- Variable Product Grouping Class ---
 # Note: This class ITSELF is likely NOT Sellable
-@dataclass
-class VariableProduct:
+class VariableProduct(SQLModel, table=True):
     """Groups related Sellable variants and holds shared info."""
 
-    group_id: str  # E.g., "TSHIRT-COTTON"
-    title: str  # E.g., "Cotton T-Shirt" (the shared name)
-    description: str | None = None
-    shared_images: list[str] = field(default_factory=list)
+    id: Optional[int] = Field(default=None, primary_key=True) # Primary Key
+    group_id: str = Field(unique=True, index=True)  # E.g., "TSHIRT-COTTON"
+    title: str = Field(index=True)  # E.g., "Cotton T-Shirt" (the shared name)
+    description: Optional[str] = Field(default=None)
+    shared_images: Optional[List[str]] = Field(default=None, sa_column=Column(JSONB))
     # We use a dictionary mapping variant SKU to the variant Sellable object
-    variants: dict[str, Sellable] = field(default_factory=dict)
-    options: dict[str, set[str]] = field(default_factory=dict)
+    variant_skus: Optional[List[str]] = Field(default=None, sa_column=Column(JSONB))
 
-    def add_variant(self, variant: Sellable):
-        """Adds a fully defined Sellable variant to the group."""
-        if not variant.sku:
-            raise ValueError("Variant must have an SKU.")
-        if variant.sku in self.variants:
-            print(f"Warning: Variant SKU {variant.sku} already exists. Overwriting.")
-        print(f"  -> Adding variant SKU {variant.sku} to group {self.group_id}")
-        self.variants[variant.sku] = variant
-        # Add options to the options dictionary
-        if hasattr(variant, "attributes") and isinstance(variant.attributes, dict):
-            for attr_name, attr_value in variant.attributes.items():
-                if attr_name not in self.options:
-                    self.options[attr_name] = set()
-            self.options[attr_name].add(attr_value)
+    # def add_variant(self, variant: Sellable):
+    #     """Adds a fully defined Sellable variant to the group."""
+    #     if not variant.sku:
+    #         raise ValueError("Variant must have an SKU.")
+    #     if variant.sku in self.variants:
+    #         print(f"Warning: Variant SKU {variant.sku} already exists. Overwriting.")
+    #     print(f"  -> Adding variant SKU {variant.sku} to group {self.group_id}")
+    #     self.variants[variant.sku] = variant
 
-    def get_variant_by_sku(self, sku: str) -> Sellable | None:
-        """Retrieves a specific variant by its unique SKU."""
-        return self.variants.get(sku)
+    # def get_variant_by_sku(self, sku: str) -> Sellable | None:
+    #     """Retrieves a specific variant by its unique SKU."""
+    #     return self.variants.get(sku)
 
-    def get_variants_by_attributes(
-        self, attrs_to_match: VariantAttributes
-    ) -> list[Sellable]:
-        """Finds variants matching specific attributes."""
-        # Assumes variants are InventoryProduct or similar with 'attributes' field
-        matches = []
-        for variant in self.variants.values():
-            if hasattr(variant, "attributes") and isinstance(variant.attributes, dict):
-                # Check if all requested attributes match the variant's attributes
-                if all(
-                    variant.attributes.get(k) == v for k, v in attrs_to_match.items()
-                ):
-                    matches.append(variant)
-        return matches
+    # def get_variants_by_attributes(
+    #     self, attrs_to_match: VariantAttributes
+    # ) -> list[Sellable]:
+    #     """Finds variants matching specific attributes."""
+    #     # Assumes variants are InventoryProduct or similar with 'attributes' field
+    #     matches = []
+    #     for variant in self.variants.values():
+    #         if hasattr(variant, "attributes") and isinstance(variant.attributes, dict):
+    #             # Check if all requested attributes match the variant's attributes
+    #             if all(
+    #                 variant.attributes.get(k) == v for k, v in attrs_to_match.items()
+    #             ):
+    #                 matches.append(variant)
+    #     return matches
 
     # Getters for shared properties
     def get_title(self) -> str:
+        return self.title
+
+    @property
+    def name(self) -> str:
         return self.title
 
     def get_description(self) -> str | None:
@@ -71,8 +72,8 @@ class VariableProduct:
     def get_shared_images(self) -> list[str]:
         return self.shared_images
 
-    def get_options(self) -> dict[str, set[str]]:
-        return self.options
+    def get_variant_skus(self) -> list[str]:
+        return self.variant_skus
 
 
 # --- 5. Builder for VariableProduct ---
@@ -104,9 +105,9 @@ class VariableProductBuilder:
         weight_kg: float | None = None,
     ) -> Self:
         variant = InventoryProduct(
-            _sku=sku,
-            _title=title,
-            _price=price,
+            sku=sku,
+            title=title,
+            price=price,
             attributes=attributes,
             weight_kg=weight_kg,
         )
@@ -123,9 +124,9 @@ class VariableProductBuilder:
         duration_hours: float | None = None,
     ) -> Self:
         variant = ServiceProduct(
-            _sku=sku,
-            _title=title,
-            _price=price,
+            sku=sku,
+            title=title,
+            price=price,
             description=description,
             images=images,
             duration_hours=duration_hours,
@@ -212,6 +213,3 @@ if __name__ == "__main__":
     if red_medium_variant:
         print("\n--- Processing a specific variant ---")
         process_sellable(red_medium_variant)  # Requires process_sellable definition
-
-    print("\n--- Getting Options ---")
-    print(variable_product.get_options())

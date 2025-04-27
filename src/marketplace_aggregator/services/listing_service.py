@@ -1,14 +1,19 @@
 # src/marketplace_aggregator/services/listing_service.py
 
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from marketplace_aggregator.models.listing import Listing
+from marketplace_aggregator.models.product import Sellable
+from marketplace_aggregator.models.promotional_rule import ProductTypeEnum, PromotionalRule
+from marketplace_aggregator.models.variable_product import VariableProduct
+from marketplace_aggregator.repositories.assembly_repo import AssemblyRepository
+from marketplace_aggregator.repositories.inventory_product_repo import InventoryProductRepository
+from marketplace_aggregator.repositories.promotional_rule_repo import PromotionalRuleRepository
+from marketplace_aggregator.repositories.service_product_repo import ServiceProductRepository
+from marketplace_aggregator.repositories.variable_product_repo import VariableProductRepository
 
 # Use relative imports for interfaces and models
-from ..repositories.product_repo import (
-    ProductRepository,
-)  # Import alias too
 from ..repositories.listing_repo import ListingRepository
 from ..adapters.marketplace import Marketplace, ListingError
 
@@ -20,7 +25,11 @@ class ListingService:
 
     def __init__(
         self,
-        product_repo: ProductRepository,
+        promotional_rule_repo: PromotionalRuleRepository,
+        inventory_product_repo: InventoryProductRepository,
+        variable_product_repo: VariableProductRepository,
+        assembly_repo: AssemblyRepository,
+        service_product_repo: ServiceProductRepository,
         listing_repo: ListingRepository,
         marketplace_adapters: Dict[str, Marketplace],  # Inject dependencies
     ):
@@ -28,205 +37,163 @@ class ListingService:
         Initializes the service with necessary dependencies.
 
         Args:
-            product_repo: Repository for accessing product data.
+            promotional_rule_repo: Repository for accessing promotional rule data.
+            inventory_product_repo: Repository for accessing inventory product data.
+            variable_product_repo: Repository for accessing variable product data.
+            assembly_repo: Repository for accessing assembly data.
+            service_product_repo: Repository for accessing service product data.
+            listing_repo: Repository for accessing listing data.
             marketplace_adapters: A dictionary mapping marketplace names (str)
                                   to configured Marketplace adapter instances.
         """
-        self._product_repo = product_repo
+        self._promotional_rule_repo = promotional_rule_repo
+        self._inventory_product_repo = inventory_product_repo
+        self._variable_product_repo = variable_product_repo
+        self._assembly_repo = assembly_repo
+        self._service_product_repo = service_product_repo
         self._listing_repo = listing_repo
         self._marketplace_adapters = marketplace_adapters
         print("ListingService initialized.")
 
-    def list_item_on_marketplace(
+
+    async def _get_product_data_and_rule(
         self,
-        product_identifier: str,  # SKU or group_id
-        marketplace_name: str,
+        rule_id: int,
+    ) -> Optional[Tuple[Sellable | VariableProduct, PromotionalRule]]:
+        # Get the rule
+        rule = await self._promotional_rule_repo.get(rule_id)
+        if not rule:
+            print(f"Service ERROR: Promotional rule with identifier '{rule_id}' not found.")
+            return None
+        if not rule.is_active:
+            print(f"Service INFO: Rule {rule_id} is not active.")
+            return None
+        
+        # Get the product data by querying a proper repository based on the rule.product_type
+        product_data: Optional[Sellable | VariableProduct] = None
+        try:
+            match rule.product_type:
+                case ProductTypeEnum.INVENTORY:
+                    product_data = await self._inventory_product_repo.get_by_sku(rule.product_identifier)
+                case ProductTypeEnum.SERVICE:
+                    product_data = await self._service_product_repo.get_by_sku(rule.product_identifier)
+                case ProductTypeEnum.VARIABLE:
+                    product_data = await self._variable_product_repo.get_by_group_id(rule.product_identifier)
+                case ProductTypeEnum.ASSEMBLY:
+                    product_data = await self._assembly_repo.get_by_sku(rule.product_identifier)
+                case _:
+                    print(f"Service ERROR: Unsupported product type '{rule.product_type}' for rule '{rule_id}'.")
+                    return None
+        except Exception as e:
+            print(f"Service ERROR: During product lookup for rule {rule_id}, identifier '{rule.product_identifier}'. Error: {e}")
+            return None
+        if not product_data:
+            print(f"Service ERROR: Product with identifier '{rule.product_identifier}' not found.")
+            return None
+        
+        return product_data, rule
+
+    async def list_item_on_marketplace(
+        self,
+        rule_id: int
     ) -> Optional[str]:
-        """
-        Fetches a product/group and submits it as a listing to a specific marketplace.
 
-        Args:
-            product_identifier: The SKU or group_id of the product/group to list.
-            marketplace_name: The name of the target marketplace (must match a key
-                              in the injected marketplace_adapters).
+        # 1. Get Product Data and Marketplace Name
+        product_rule_tuple = await self._get_product_data_and_rule(rule_id)
+        if not product_rule_tuple:
+            return None
+        product_data, rule = product_rule_tuple
+        marketplace_name = rule.marketplace_name
+        print(f"\nService: Attempting async listing for '{product_data}' on '{marketplace_name}'...")
 
-        Returns:
-            The new marketplace listing ID if successful, None otherwise.
-        """
-        print(
-            f"\nService: Attempting to list '{product_identifier}' on '{marketplace_name}'..."
-        )
-
-        # 1. Get the specific Marketplace adapter instance
-        # Implement:
-        #   - Get adapter from self._marketplace_adapters using marketplace_name
-        #   - Handle case where marketplace_name is not found (print error, return None)
-
+        # 2. Get Adapter (Stays the same logic, but adapter methods are now async)
         adapter = self._marketplace_adapters.get(marketplace_name)
         if not adapter:
-            print(
-                f"Service ERROR: Marketplace adapter for '{marketplace_name}' not configured."
-            )
-            return None
+             print(f"Service ERROR: Marketplace adapter '{marketplace_name}' not configured.")
+             return None
 
-        # 2. Get the product data from the repository
-        # Implement:
-        #   - Get product_data from self._product_repo using product_identifier
-        #   - Handle case where product_identifier is not found (print error, return None)
-        product_data = self._product_repo.get(product_identifier)
-        if not product_data:
-            print(
-                f"Service ERROR: Product/Group with identifier '{product_identifier}' not found."
-            )
-            return None
-
-        # 3. Submit the listing via the adapter
-        # Implement:
-        #   - Call adapter.submit_listing(product_data)
-        #   - Use a try...except ListingError block to handle potential submission errors
-        #   - Print success/error messages
-        #   - Return the listing_id on success, None on error
+        # 3. Submit Listing (Now awaits adapter call and repo call)
+        # Prepare Listing Config
+        listing_config = rule.marketplace_specific_settings or {}
         try:
-            print(
-                f"Service: Submitting {product_data.__class__.__name__} '{product_identifier}' via {adapter.name} adapter..."
+            print(f"Service: Submitting {product_data.__class__.__name__} '{product_data.title}' via {adapter.name} adapter...")
+            listing_id_on_marketplace = await adapter.submit_listing(
+                product_data,
+                listing_config=listing_config
             )
-            # Note: We are currently NOT passing seller_config here, as the adapter
-            # was initialized with it. This might need revisiting depending on how
-            # multi-tenant the adapters are designed. For now, assume adapter is pre-configured.
-            listing_id_on_marketplace = adapter.submit_listing(product_data)
-            print(
-                f"Service: Successfully submitted listing. Marketplace Listing ID: {listing_id_on_marketplace}"
-            )
+            print(f"Service: Successfully submitted listing. Marketplace Listing ID: {listing_id_on_marketplace}")
 
             try:
-                print("Service: Saving internal listing record...")
+                print(f"Service: Saving internal listing record...")
                 new_listing = Listing(
-                    product_identifier=product_identifier,
-                    marketplace_name=marketplace_name,  # Or adapter.name
+                    rule_id=rule.id,
+                    marketplace_name=adapter.name, # Use adapter name
                     marketplace_listing_id=listing_id_on_marketplace,
-                    status="active",  # Assume active on successful submission
-                    # Optionally get price/URL if adapter returns more details
-                    # listed_price=product_data.get_price(), # Example
-                    last_updated_at=datetime.now(timezone.utc),
+                    status="active",
+                    listed_price=rule.price_override or product_data.get_price(),
+                    last_updated_at=datetime.now(timezone.utc)
                 )
-                self._listing_repo.add_or_update(new_listing)
-                print("Service: Internal listing record saved.")
+                await self._listing_repo.add(new_listing) # await repo call (use add)
+                print(f"Service: Internal listing record saved.")
             except Exception as repo_err:
-                # Log or handle failure to save internal listing record - crucial!
-                print(
-                    f"Service CRITICAL ERROR: Failed to save listing record for {listing_id_on_marketplace} after successful submission! Error: {repo_err}"
-                )
-                # Decide recovery strategy: maybe try deleting listing from marketplace?
-                # For now, we still return the ID, but flag the error.
+                print(f"Service CRITICAL ERROR: Failed to save listing record... Error: {repo_err}")
 
             return listing_id_on_marketplace
+
         except ListingError as e:
-            print(
-                f"Service ERROR: Failed to submit listing for '{product_identifier}' on '{marketplace_name}'. Error: {e}"
-            )
+            print(f"Service ERROR: Failed to submit listing... Error: {e}")
             return None
-        except Exception as e:  # Catch unexpected errors too
+        except Exception as e:
             print(f"Service CRITICAL ERROR during listing submission: {e}")
-            # Potentially re-raise or log more details
             return None
 
-    def update_price_on_marketplace(
+
+    async def update_price_on_marketplace( # Add async
         self, listing_id: str, marketplace_name: str, sku: str, new_price: float
     ) -> bool:
-        """
-        Updates the price for a specific SKU within a listing on a marketplace.
-        Args:
-            listing_id: The ID of the listing to update.
-            marketplace_name: The name of the marketplace to update.
-            sku: The SKU of the product to update.
-            new_price: The new price to set.
-        Returns:
-            True if the update was likely successful, False otherwise.
-        """
-        print(
-            f"\nService: Attempting price update for listing '{listing_id}', SKU '{sku}' on '{marketplace_name}' to {new_price:.2f}"
-        )
-
-        # 1. Get adapter instance from self._marketplace_adapters
-        #    - Handle case where marketplace_name is not found (print error, return False)
+        print(f"\nService: Attempting async price update...")
         adapter = self._marketplace_adapters.get(marketplace_name)
         if not adapter:
-            print(
-                f"Service ERROR: Marketplace adapter for '{marketplace_name}' not configured."
-            )
-            return False
-
-        # 2. Call adapter.update_listing_price(...)
-        #    - Wrap in try...except ListingError (and maybe Exception)
-        #    - Print success or error messages
-        #    - Return True on success, False on error
+             print(f"Service ERROR: Marketplace adapter '{marketplace_name}' not configured.")
+             return False
         try:
-            print(
-                f"Service: Updating price for listing '{listing_id}' on '{marketplace_name}' to {new_price:.2f}"
-            )
-            adapter.update_listing_price(listing_id, sku, new_price)
-            print(
-                f"Service: Successfully updated price for listing '{listing_id}' on '{marketplace_name}' to {new_price:.2f}"
-            )
+            print(f"Service: Updating price via {adapter.name} adapter...")
+            await adapter.update_listing_price(listing_id, sku, new_price) # await adapter call
+            print(f"Service: Successfully submitted price update for listing '{listing_id}', SKU '{sku}'.")
+            # Optional: await self._listing_repo.update(...) here
             return True
         except ListingError as e:
-            print(
-                f"Service ERROR: Failed to update price for listing '{listing_id}' on '{marketplace_name}'. Error: {e}"
-            )
+            print(f"Service ERROR: Failed price update... Error: {e}")
             return False
         except Exception as e:
-            # Catch unexpected errors from the adapter for more robustness
             print(f"Service CRITICAL ERROR during price update: {e}")
-            # import traceback; traceback.print_exc() # Consider logging traceback
             return False
 
-    def update_stock_on_marketplace(
+
+    async def update_stock_on_marketplace( # Add async
         self, listing_id: str, marketplace_name: str, sku_stock: Dict[str, int]
     ) -> bool:
-        """
-        Updates the stock levels for one or more SKUs within a listing on a marketplace.
-        Args:
-            listing_id: The ID of the listing to update.
-            marketplace_name: The name of the marketplace to update.
-            sku_stock: A dictionary mapping SKUs to their new stock levels.
-        Returns:
-            True if the update was likely successful, False otherwise.
-        """
-        print(
-            f"\nService: Attempting stock update for listing '{listing_id}' on '{marketplace_name}': {sku_stock}"
-        )
-        # 1. Get adapter instance, return False if not found (print error)
+        print(f"\nService: Attempting async stock update...")
         adapter = self._marketplace_adapters.get(marketplace_name)
         if not adapter:
-            print(
-                f"Service ERROR: Marketplace adapter for '{marketplace_name}' not configured."
-            )
-            return False
-
-        # 2. Call adapter.update_listing_stock(...) in try/except ListingError
-        #    Print success/error messages
-        #    Return True on success, False on error
+             print(f"Service ERROR: Marketplace adapter '{marketplace_name}' not configured.")
+             return False
         try:
             print(f"Service: Updating stock via {adapter.name} adapter...")
-            adapter.update_listing_stock(listing_id, sku_stock)
-            print(
-                f"Service: Successfully updated stock for listing '{listing_id}' on '{marketplace_name}'."
-            )
+            await adapter.update_listing_stock(listing_id, sku_stock) # await adapter call
+            print(f"Service: Successfully submitted stock update for listing '{listing_id}'.")
+            # Optional: Update internal stock representation or Listing metadata later
             return True
         except ListingError as e:
-            print(
-                f"Service ERROR: Failed to update stock for listing '{listing_id}' on '{marketplace_name}'. Error: {e}"
-            )
+            print(f"Service ERROR: Failed stock update... Error: {e}")
             return False
         except Exception as e:
-            # Catch unexpected errors from the adapter for more robustness
             print(f"Service CRITICAL ERROR during stock update: {e}")
-            # import traceback; traceback.print_exc() # Consider logging traceback
             return False
-
+        
 
 # --- Example Usage (Conceptual - how you might wire it up) ---
-if __name__ == "__main__":
+if __name__ == "__main__" and False:
     from ..repositories.product_repo import InMemoryProductRepository
     from ..repositories.listing_repo import InMemoryListingRepository
     from ..adapters.mock_marketplace import MockMarketplace
@@ -236,10 +203,10 @@ if __name__ == "__main__":
     # 1. Create repository and add some data
     product_repo = InMemoryProductRepository()
     product_repo.add(
-        InventoryProduct(_sku="TEST-SKU-01", _title="Test Widget", _price=10.0)
+        InventoryProduct(sku="TEST-SKU-01", title="Test Widget", price=10.0)
     )
     product_repo.add(
-        InventoryProduct(_sku="TEST-SKU-02", _title="Another Widget", _price=15.0)
+        InventoryProduct(sku="TEST-SKU-02", title="Another Widget", price=15.0)
     )
     listing_repo = InMemoryListingRepository()
 
@@ -274,3 +241,100 @@ if __name__ == "__main__":
     # Try listing on non-existent marketplace
     list_id4 = listing_service.list_item_on_marketplace("TEST-SKU-01", "UnknownPlace")
     print(f"Resulting Listing ID 4: {list_id4}")
+
+if __name__ == "__main__":  # pragma: no cover
+    # --- Imports needed for demonstration ---
+    from ..repositories.product_repo import InMemoryProductRepository
+    from ..repositories.listing_repo import (
+        InMemoryListingRepository,
+    )  # Import listing repo
+
+    # Import the concrete adapter, NOT the mock
+    from ..adapters.fakeamazon_adapter import FakemazonAdapter
+    from ..models.product import InventoryProduct
+    from ..models.variable_product import (
+        VariableProductBuilder,
+    )  # Need builder to create variable product
+
+    print("--- Setting up dependencies for integration run ---")
+    # 1. Create repositories
+    product_repo = InMemoryProductRepository()
+    listing_repo = InMemoryListingRepository()  # Create listing repo instance
+
+    # 2. Add some data using the Builder for a VariableProduct
+    builder = VariableProductBuilder(group_id="TUMBLER-G1", title="Insulated Tumbler")
+    tumbler_group = (
+        builder.set_description("Keeps drinks cold or hot.")
+        .add_shared_image("tumbler_lifestyle.jpg")
+        .add_inventory_variant(
+            sku="TUMBLER-BL-L",
+            title="Tumbler (Blue, L)",
+            price=25.00,
+            attributes={"Color": "Blue", "Size": "Large"},
+            weight_kg=0.45,
+        )
+        .add_inventory_variant(
+            sku="TUMBLER-BK-M",
+            title="Tumbler (Black, M)",
+            price=25.00,
+            attributes={"Color": "Black", "Size": "Medium"},
+            weight_kg=0.40,
+        )
+        .build()
+    )
+    product_repo.add(tumbler_group)  # Add the group to repo
+
+    # Add a simple product too
+    widget = InventoryProduct(sku="WIDGET-01", title="Standard Widget", price=9.99)
+    product_repo.add(widget)
+
+    # 3. Create and configure the *concrete* marketplace adapter
+    fakemazon_config = {"seller_id": "SELLER_AMA_1", "api_key": "AMAZON_FAKE_KEY"}
+    fakemazon_adapter = FakemazonAdapter(fakemazon_config)
+
+    marketplace_adapters = {
+        fakemazon_adapter.name: fakemazon_adapter
+        # Could add other adapters here later
+    }
+
+    # 4. Inject dependencies into the service
+    listing_service = ListingService(product_repo, listing_repo, marketplace_adapters)
+
+    print("\n--- Running Service Logic with FakemazonAdapter ---")
+
+    # --- List the Variable Product ---
+    print("\n>>> Listing Variable Product...")
+    listing_id_tumbler = listing_service.list_item_on_marketplace(
+        product_identifier="TUMBLER-G1",  # Use group ID
+        marketplace_name="Fakemazon",
+    )
+    print(f"<<< Tumbler Group Listing ID: {listing_id_tumbler}")
+
+    # --- List the Simple Product ---
+    print("\n>>> Listing Simple Product...")
+    listing_id_widget = listing_service.list_item_on_marketplace(
+        product_identifier="WIDGET-01",  # Use SKU
+        marketplace_name="Fakemazon",
+    )
+    print(f"<<< Widget Listing ID: {listing_id_widget}")
+
+    # --- Update Price (if listing succeeded) ---
+    if listing_id_tumbler:
+        print("\n>>> Updating Price for a Variant...")
+        success = listing_service.update_price_on_marketplace(
+            listing_id=listing_id_tumbler,
+            marketplace_name="Fakemazon",
+            sku="TUMBLER-BK-M",  # SKU of the specific variant
+            new_price=24.50,
+        )
+        print(f"<<< Price Update Success: {success}")
+
+    # --- Update Stock (if listing succeeded) ---
+    if listing_id_tumbler:
+        print("\n>>> Updating Stock for Variants...")
+        success = listing_service.update_stock_on_marketplace(
+            listing_id=listing_id_tumbler,
+            marketplace_name="Fakemazon",
+            sku_stock={"TUMBLER-BL-L": 50, "TUMBLER-BK-M": 35},
+        )
+        print(f"<<< Stock Update Success: {success}")

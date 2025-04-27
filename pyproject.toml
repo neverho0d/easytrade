@@ -9,6 +9,11 @@ packages = [{include = "marketplace_aggregator", from = "src"}]
 [tool.poetry.dependencies]
 python = "^3.11" # Use Python 3.11+ for modern features like Self, asyncio.timeout etc.
 # Add core runtime dependencies here later (e.g., httpx, pydantic if needed)
+sqlmodel = "^0.0.24"
+asyncpg = "^0.30.0"
+python-dotenv = "^1.1.0"
+litestar = {extras = ["standard"], version = "^2.15.2"}
+advanced-alchemy = "^1.3.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1.1"   # Or latest stable version
@@ -16,6 +21,7 @@ ruff = "^0.4.1"     # Fast linter/formatter
 mypy = "^1.9.0"     # Static type checker
 # Add other dev tools like pytest-cov, black, isort if desired
 pytest-cov = "^6.1.1"
+pytest-asyncio = "^0.26.0"
 
 [tool.poetry.group.docs.dependencies]
 # Sphinx = "^7.2.6" # Example if using Sphinx later
