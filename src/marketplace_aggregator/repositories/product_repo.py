@@ -59,7 +59,7 @@ class InMemoryProductRepository(ProductRepository):
         # Determine the key (SKU or group_id)
         identifier = None
         if isinstance(product_data, Sellable):
-            identifier = product_data.sku
+            identifier = product_data.get_sku()
         elif isinstance(product_data, VariableProduct):
             identifier = product_data.group_id
         else:

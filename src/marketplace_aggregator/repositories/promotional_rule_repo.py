@@ -7,7 +7,7 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from ..models.promotional_rule import PromotionalRule
 
 
-class PromotionalRuleRepository(SQLAlchemyAsyncRepository[PromotionalRule]):
+class PromotionalRuleRepository(SQLAlchemyAsyncRepository[PromotionalRule]):  # type: ignore[type-var]
     """Repository for PromotionalRule data."""
 
     model_type = PromotionalRule

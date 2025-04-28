@@ -1,6 +1,5 @@
 # src/marketplace_aggregator/repositories/listing_repo.py
 
-from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional
 
 # Import the SQLAlchemy/SQLModel Repository base from Advanced Alchemy
@@ -12,41 +11,7 @@ from ..models.listing import Listing
 ListingKey = Tuple[str, str]  # Type alias for (marketplace_name, listing_id)
 
 
-class ListingRepositoryInterface(ABC):
-    """
-    Interface defining operations for storing and retrieving Listing data.
-    """
-
-    @abstractmethod
-    def add_or_update(self, listing: Listing) -> None:
-        """Adds a new listing or updates an existing one based on composite key."""
-        pass
-
-    @abstractmethod
-    def get(self, marketplace_name: str, listing_id: str) -> Optional[Listing]:
-        """Retrieves a specific listing by its marketplace and listing ID."""
-        pass
-
-    @abstractmethod
-    def get_by_product(self, product_identifier: str) -> List[Listing]:
-        """Retrieves all listings associated with an internal product identifier."""
-        pass
-
-    @abstractmethod
-    def list_all(self) -> List[Listing]:
-        """Lists all stored listings."""
-        pass
-
-    @abstractmethod
-    def delete(self, marketplace_name: str, listing_id: str) -> bool:
-        """Removes a listing. Returns True if found and removed."""
-        pass
-
-
-# --- Concrete Repository using Advanced Alchemy ---
-
-
-class ListingRepository(SQLAlchemyAsyncRepository[Listing], ListingRepositoryInterface):
+class ListingRepository(SQLAlchemyAsyncRepository[Listing]):  # type: ignore[type-var]
     """SQLAlchemy/SQLModel implementation for Listing data access using Advanced Alchemy."""
 
     model_type = Listing  # Link to the SQLModel class
@@ -62,9 +27,9 @@ class ListingRepository(SQLAlchemyAsyncRepository[Listing], ListingRepositoryInt
         else:
             return await super().add(data)  # Use base add if no ID (new instance)
 
-    async def update(self, data: Listing) -> Listing:
+    async def update(self, data: Listing, *args, **kwargs) -> Listing:
         # Use the base repository's update method
-        return await super().update(data)
+        return await super().update(data, *args, **kwargs)
 
     async def get_by_composite_id(
         self, marketplace_name: str, marketplace_listing_id: str

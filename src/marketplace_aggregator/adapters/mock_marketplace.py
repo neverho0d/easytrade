@@ -3,6 +3,8 @@ from datetime import datetime
 import uuid
 from dataclasses import dataclass, field
 
+from marketplace_aggregator.models.dto import AssemblyListingData, VariableListingData
+
 from ..adapters.marketplace import ListingError, Marketplace
 from ..models.product import Sellable
 from ..models.variable_product import VariableProduct
@@ -11,7 +13,7 @@ from ..models.variable_product import VariableProduct
 @dataclass
 class MockListingItem:
     listing_id: str
-    item: Sellable | VariableProduct
+    item: Sellable | VariableListingData | AssemblyListingData
     stock: Dict[str, int] = field(default_factory=dict)
     price_overrides: Dict[str, float] = field(default_factory=dict)
 
@@ -39,14 +41,19 @@ class MockMarketplace(Marketplace):
 
     async def submit_listing(
         self,
-        item: Sellable | VariableProduct,
+        item: Sellable | VariableListingData | AssemblyListingData,
         listing_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Simulates submitting a listing. Generates a fake ID.
         Initial stock is assumed to be empty or needs separate update.
         """
-        identifier = item.sku if isinstance(item, Sellable) else item.group_id
+        if isinstance(item, VariableListingData):
+            identifier = item.group.group_id
+        elif isinstance(item, AssemblyListingData):
+            identifier = item.assembly.sku
+        else:
+            identifier = item.get_sku()
         print(
             f"{self.name} ({self._seller_id}): Received submit_listing for {identifier}"
             f"with listing_config: {listing_config}"
@@ -79,10 +86,10 @@ class MockMarketplace(Marketplace):
         # Validate SKU exists for the item
         sku_exists = False
         if isinstance(item, VariableProduct):
-            if sku in item.variants:
+            if sku in item.get_variant_skus():
                 sku_exists = True
         elif isinstance(item, Sellable):
-            if item.sku == sku:
+            if item.get_sku() == sku:
                 sku_exists = True
 
         if not sku_exists:
@@ -117,10 +124,10 @@ class MockMarketplace(Marketplace):
             # Basic validation: does this SKU belong to this listing?
             sku_exists = False
             if isinstance(item, VariableProduct):
-                if sku in item.variants:
+                if sku in item.get_variant_skus():
                     sku_exists = True
             elif isinstance(item, Sellable):
-                if item.sku == sku:
+                if item.get_sku() == sku:
                     sku_exists = True
 
             if not sku_exists:

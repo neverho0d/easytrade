@@ -5,10 +5,11 @@ from typing import Dict, Any, List, Optional, TypedDict
 from datetime import datetime
 import uuid
 
+from marketplace_aggregator.models.dto import AssemblyListingData, VariableListingData
+
 # Use relative imports
 from .marketplace import Marketplace, ListingError
 from ..models.product import Sellable, InventoryProduct
-from ..models.variable_product import VariableProduct
 
 
 class FakemazonVariant(TypedDict, total=False):
@@ -63,7 +64,7 @@ class FakemazonAdapter(Marketplace):
 
     async def submit_listing(
         self,
-        item: Sellable | VariableProduct,
+        item: Sellable | VariableListingData | AssemblyListingData,
         listing_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
@@ -71,7 +72,7 @@ class FakemazonAdapter(Marketplace):
         and 'submits' it (prints and stores locally).
         """
         print(
-            f"\nFakemazonAdapter: Preparing listing submission for '{item.title if isinstance(item, Sellable) else item.name}'..."
+            f"\nFakemazonAdapter: Preparing listing submission for '{item.get_title()}'..."
         )
 
         api_payload: FakemazonApiPayload
@@ -82,50 +83,67 @@ class FakemazonAdapter(Marketplace):
         # Based on the type, construct the 'api_payload' dictionary
         # in a format "Fakemazon" might expect.
 
-        if isinstance(item, VariableProduct):
+        if isinstance(item, VariableListingData):
             # Handle VariableProduct - create payload with parent info + variants list
             print("  (Detected VariableProduct - formatting with variants)")
-            identifier = item.group_id
+            identifier = item.group.group_id
             api_payload = {
                 "listing_type": "variable",
-                "group_id": item.group_id,
-                "title": item.name,  # Use group name
-                "description": item.get_description(),
+                "group_id": item.group.group_id,
+                "title": item.group.name,  # Use group name
+                "description": item.group.description,
                 "brand": "Generic Brand",  # Example fixed value
                 "category": "Misc",  # Example fixed value
-                "images": item.get_shared_images(),
+                "images": item.group.get_shared_images(),
                 "variants": [],
             }
-            for variant_sku, variant_obj in item.variants.items():
+            for variant in item.variants:
                 # Assume variant_obj is InventoryProduct for simplicity here
                 # In reality, need to handle different Sellable types if needed
                 variant_payload: FakemazonVariant = {
-                    "sku": variant_sku,
-                    "price": variant_obj.get_price(),
+                    "sku": variant.get_sku(),
+                    "price": variant.get_price(),
                     "attributes": getattr(
-                        variant_obj, "attributes", {}
+                        variant, "attributes", {}
                     ),  # Safely get attributes
-                    "images": variant_obj.get_images(),
-                    "ean": f"EAN-{variant_sku}",  # Example generated field
+                    "images": variant.get_images(),
+                    "ean": f"EAN-{variant.get_sku()}",  # Example generated field
                 }
-                if isinstance(variant_obj, InventoryProduct):
-                    variant_payload["weight_kg"] = variant_obj.weight_kg
+                if isinstance(variant, InventoryProduct):
+                    variant_payload["weight_kg"] = variant.weight_kg
                 api_payload["variants"].append(variant_payload)
+
+        elif isinstance(item, AssemblyListingData):
+            # Handle AssemblyListingData
+            print("  (Detected AssemblyListingData - formatting assembly listing)")
+            identifier = item.assembly.sku
+            api_payload = {
+                "listing_type": "assembly",
+                "sku": item.assembly.sku,
+                "title": item.assembly.title,
+                "description": item.assembly.description,
+                "brand": "Generic Brand",
+                "category": "Misc",
+                "images": item.assembly.images,
+                "variants": [],
+            }
+            # We don't show components of assemblies on the listing, it's just the assembly itself
+            # and components are required to be handled properly in order/warehouse/delivery
 
         elif isinstance(item, Sellable):
             # Handle simple Sellable item (InventoryProduct, Service, Assembly)
             print("  (Detected single Sellable item - formatting simple listing)")
-            identifier = item.sku
+            identifier = item.get_sku()
             api_payload = {
                 "listing_type": "simple",
-                "sku": item.sku,
-                "title": item.title,
+                "sku": item.get_sku(),
+                "title": item.get_title(),
                 "description": item.get_description(),
                 "price": item.get_price(),
                 "brand": "Generic Brand",
                 "category": "Misc",
                 "images": item.get_images(),
-                "ean": f"EAN-{item.sku}",
+                "ean": f"EAN-{item.get_sku()}",
             }
             # Add type-specific fields if needed (e.g., weight for Inventory)
             if isinstance(item, InventoryProduct):
@@ -137,7 +155,7 @@ class FakemazonAdapter(Marketplace):
 
         # Apply promotional rule if provided
         if listing_config:
-            api_payload = self.listing_config(api_payload, listing_config)
+            api_payload = self._apply_listing_config(api_payload, listing_config)
 
         # Simulate API call
         print("FakemazonAdapter: Simulating API call with payload:")
@@ -153,7 +171,7 @@ class FakemazonAdapter(Marketplace):
         print(f"FakemazonAdapter: Submission successful. Listing ID: {listing_id}")
         return listing_id
 
-    def listing_config(
+    def _apply_listing_config(
         self, api_payload: FakemazonApiPayload, listing_config: Dict[str, Any]
     ) -> FakemazonApiPayload:
         """
@@ -161,8 +179,8 @@ class FakemazonAdapter(Marketplace):
         """
         for key, value in listing_config.items():
             # if key is the same as in FakemazonApiPayload, update the value
-            if key in api_payload:
-                api_payload[key] = value
+            if key in api_payload.keys():
+                api_payload[key] = value  # type: ignore
         return api_payload
 
     # --- Implement other methods (Simplified for Mock) ---

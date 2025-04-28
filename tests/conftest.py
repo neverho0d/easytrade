@@ -1,6 +1,6 @@
 # tests/conftest.py
 
-import pytest_asyncio
+import pytest
 from typing import AsyncIterator
 
 from litestar import Litestar
@@ -13,7 +13,7 @@ from marketplace_aggregator.main import app
 app.debug = True
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest.fixture
 async def test_client() -> AsyncIterator[AsyncTestClient[Litestar]]:
     """Fixture to create an httpx test client for the Litestar app."""
     # LitestarTestClient is based on httpx.AsyncClient

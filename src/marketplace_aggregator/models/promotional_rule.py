@@ -1,6 +1,5 @@
 # src/marketplace_aggregator/models/promotional_rule.py
 
-from enum import StrEnum
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
@@ -8,12 +7,7 @@ from sqlmodel import SQLModel, Field
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
 
-
-class ProductTypeEnum(StrEnum):
-    INVENTORY = "inventory"
-    SERVICE = "service"
-    ASSEMBLY = "assembly"
-    VARIABLE = "variable"
+from marketplace_aggregator.models.product import ProductTypeEnum
 
 
 class PromotionalRule(SQLModel, table=True):

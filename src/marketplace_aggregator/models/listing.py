@@ -9,6 +9,12 @@ from pydantic import PrivateAttr
 from sqlmodel import Field, SQLModel
 
 
+class ListingStateError(Exception):
+    """Exception raised when an action is not allowed in the current state."""
+
+    pass
+
+
 # --- State Interface ---
 class ListingState(ABC):
     """
@@ -56,15 +62,24 @@ class ListingState(ABC):
         """Return the name of the state."""
         return self.__class__.__name__.lower().replace("state", "")
 
+    # --- Helper for disallowed actions ---
+    def _action_not_allowed(self, action_name: str):
+        print(
+            f"  State({self.name}): Action '{action_name}' not allowed in state '{self.name}'."
+        )
+        raise ListingStateError(
+            f"Action '{action_name}' not allowed in state '{self.name}'."
+        )
+
 
 class PendingState(ListingState):
     """State for listings awaiting initial activation/review."""
 
     def update_price(self, new_price: float) -> None:
-        print(f"  State({self.name}): Cannot update price yet, listing is pending.")
+        self._action_not_allowed("update_price")
 
     def update_stock(self, sku_stock: Dict[str, int]) -> None:
-        print(f"  State({self.name}): Cannot update stock yet, listing is pending.")
+        self._action_not_allowed("update_stock")
 
     def activate(self) -> None:
         print(f"  State({self.name}): Activating listing...")
@@ -72,7 +87,7 @@ class PendingState(ListingState):
         self._listing.set_state(ActiveState(self._listing))  # Transition to Active
 
     def deactivate(self) -> None:
-        print(f"  State({self.name}): Cannot deactivate, listing is still pending.")
+        self._action_not_allowed("deactivate")
 
     def end_listing(self) -> None:
         print(f"  State({self.name}): Ending pending listing.")
@@ -125,10 +140,10 @@ class InactiveState(ListingState):
     """State for listings that are inactive on the marketplace."""
 
     def update_price(self, new_price: float) -> None:
-        print(f"  State({self.name}): Cannot update price, listing is inactive.")
+        self._action_not_allowed("update_price")
 
     def update_stock(self, sku_stock: Dict[str, int]) -> None:
-        print(f"  State({self.name}): Cannot update stock, listing is inactive.")
+        self._action_not_allowed("update_stock")
 
     def activate(self) -> None:
         print(f"  State({self.name}): Activating listing...")
@@ -139,7 +154,8 @@ class InactiveState(ListingState):
         print(f"  State({self.name}): Listing is already inactive.")
 
     def end_listing(self) -> None:
-        print(f"  State({self.name}): Cannot end, listing is inactive.")
+        print(f"  State({self.name}): Ending inactive listing.")
+        self._listing.set_state(EndedState(self._listing))  # Transition to Ended
 
     def handle_error(self, error_details: str) -> None:
         print(f"  State({self.name}): Error occurred while inactive: {error_details}")
@@ -150,16 +166,18 @@ class EndedState(ListingState):
     """State for listings that have been ended."""
 
     def update_price(self, new_price: float) -> None:
-        print(f"  State({self.name}): Cannot update price, listing is ended.")
+        self._action_not_allowed("update_price")
 
     def update_stock(self, sku_stock: Dict[str, int]) -> None:
-        print(f"  State({self.name}): Cannot update stock, listing is ended.")
+        self._action_not_allowed("update_stock")
 
     def activate(self) -> None:
-        print(f"  State({self.name}): Cannot activate, listing is ended.")
+        print(f"  State({self.name}): Activating ended listing.")
+        self._listing.set_state(ActiveState(self._listing))  # Transition to Active
 
     def deactivate(self) -> None:
-        print(f"  State({self.name}): Cannot deactivate, listing is ended.")
+        print(f"  State({self.name}): Deactivating ended listing.")
+        self._listing.set_state(InactiveState(self._listing))  # Transition to Inactive
 
     def end_listing(self) -> None:
         print(f"  State({self.name}): Listing is already ended.")
@@ -173,23 +191,27 @@ class ErrorState(ListingState):
     """State for listings that have encountered an error."""
 
     def update_price(self, new_price: float) -> None:
-        print(f"  State({self.name}): Cannot update price, listing is in error.")
+        self._action_not_allowed("update_price")
 
     def update_stock(self, sku_stock: Dict[str, int]) -> None:
-        print(f"  State({self.name}): Cannot update stock, listing is in error.")
+        self._action_not_allowed("update_stock")
 
     def activate(self) -> None:
-        print(f"  State({self.name}): Cannot activate, listing is in error.")
+        print(f"  State({self.name}): Activating error listing.")
+        self._listing.set_state(ActiveState(self._listing))  # Transition to Active
 
     def deactivate(self) -> None:
-        print(f"  State({self.name}): Cannot deactivate, listing is in error.")
+        print(f"  State({self.name}): Deactivating error listing.")
+        self._listing.set_state(InactiveState(self._listing))  # Transition to Inactive
 
     def end_listing(self) -> None:
-        print(f"  State({self.name}): Cannot end, listing is in error.")
+        print(f"  State({self.name}): Ending error listing.")
+        self._listing.set_state(EndedState(self._listing))  # Transition to Ended
 
     def handle_error(self, error_details: str) -> None:
-        print(f"  State({self.name}): Error occurred while in error: {error_details}")
-        print(f"  State({self.name}): Listing is already in error.")
+        print(
+            f"  State({self.name}): Additional error occurred while in error: {error_details}"
+        )
 
 
 class Listing(SQLModel, table=True):
@@ -228,7 +250,7 @@ class Listing(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc)
     )
     # Internal state object - not mapped to DB, init=False
-    _state: ListingState = PrivateAttr(default=None)
+    _state: ListingState = PrivateAttr()
 
     # --- Optional Metadata ---
     # For any extra marketplace-specific info we might need to cache
@@ -260,7 +282,9 @@ class Listing(SQLModel, table=True):
                 self.marketplace_listing_id,
             ]
         ):
-            raise ValueError("Core listing identifiers cannot be empty")
+            raise ValueError(
+                f"Core listing identifiers cannot be empty: {self.rule_id}/{self.marketplace_name}/{self.marketplace_listing_id}"
+            )
 
     @property
     def marketplace_id(self) -> tuple[str, str]:
@@ -277,9 +301,9 @@ class Listing(SQLModel, table=True):
         self.last_updated_at = datetime.now(timezone.utc)
 
     @property
-    def surrent_status(self) -> str:
+    def current_status(self) -> str:
         """Returns the name of the current state class."""
-        # Handle case where _state might not be initialized yet if accessed before __post_init__ somehow
+        # Handle case where _state might not be initialized yet if accessed before model_post_init somehow
         return self._state.name if self._state else self.status
 
     # --- Public methods delegate to the current state ---
@@ -327,7 +351,7 @@ if __name__ == "__main__":
     listing.update_price(100.00)
     print(f"Listing {listing.marketplace_listing_id} is in state: {listing.status}")
     listing.deactivate()
-    listing.update_price(100.00)
+    listing.update_stock({"1234567890": 10})
     print(f"Listing {listing.marketplace_listing_id} is in state: {listing.status}")
     listing.end_listing()
     listing.update_price(100.00)

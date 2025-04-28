@@ -5,7 +5,7 @@ from advanced_alchemy.repository import SQLAlchemyAsyncRepository
 from ..models.variable_product import VariableProduct
 
 
-class VariableProductRepository(SQLAlchemyAsyncRepository[VariableProduct]):
+class VariableProductRepository(SQLAlchemyAsyncRepository[VariableProduct]):  # type: ignore[type-var]
     """Repository for VariableProduct group data."""
 
     model_type = VariableProduct

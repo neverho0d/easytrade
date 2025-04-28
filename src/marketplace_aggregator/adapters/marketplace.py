@@ -7,11 +7,11 @@ from typing import (
     Dict,
     Any,
     Optional,
-)  # Using Any for now for generic order/config dicts
+)
 
 # Import our core model - use relative import within the package
 from ..models.product import Sellable
-from ..models.variable_product import VariableProduct
+from ..models.dto import AssemblyListingData, VariableListingData
 
 
 class Marketplace(ABC):
@@ -30,7 +30,7 @@ class Marketplace(ABC):
     @abstractmethod
     async def submit_listing(
         self,
-        item: Sellable | VariableProduct,
+        item: Sellable | VariableListingData | AssemblyListingData,
         listing_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """

@@ -1,7 +1,9 @@
 # src/marketplace_aggregator/models/product.py
 
 from abc import ABC, abstractmethod
+from enum import StrEnum
 from typing import List, Optional, TypeAlias
+from typing_extensions import TypedDict
 
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
@@ -11,6 +13,13 @@ from sqlmodel import Field, SQLModel
 Dimensions: TypeAlias = tuple[float, float, float]  # L, W, H
 VariantAttributes: TypeAlias = dict[str, str]  # e.g., {"Size": "L", "Color": "Red"}
 VariantMap: TypeAlias = dict[str, float]  # e.g., {"Size=L,Color=Red": price_adjustment}
+
+
+class ProductTypeEnum(StrEnum):
+    INVENTORY = "inventory"
+    SERVICE = "service"
+    ASSEMBLY = "assembly"
+    VARIABLE = "variable"
 
 
 # --- 1. Sellable Interface (using ABC) ---
@@ -46,13 +55,18 @@ class Sellable(ABC):
         """Get a list of image URLs/paths."""
         pass
 
+    @abstractmethod
+    def get_type(self) -> ProductTypeEnum:
+        """Get the type of the product."""
+        pass
+
     # Maybe add more common methods later, like get_weight, get_type etc.
 
 
 # Test interface conformity
 def process_sellable(item: Sellable):
     print(
-        f"Processing {item.__class__.__name__}: {item.title} ({item.sku}) - ${item.get_price():.2f}"
+        f"Processing {item.__class__.__name__}: {item.get_title()} ({item.get_sku()}) - ${item.get_price():.2f}"
     )
 
 
@@ -89,6 +103,9 @@ class InventoryProduct(SQLModel, Sellable, table=True):
 
     def get_images(self) -> list[str]:
         return self.images or []  # Accessing dataclass field directly
+
+    def get_type(self) -> ProductTypeEnum:
+        return ProductTypeEnum.INVENTORY
 
     # InventoryProduct specific methods could go here later
 
@@ -127,7 +144,17 @@ class ServiceProduct(SQLModel, Sellable, table=True):
     def get_images(self) -> list[str] | None:
         return self.images or []
 
+    def get_type(self) -> ProductTypeEnum:
+        return ProductTypeEnum.SERVICE
+
     # ServiceProduct specific methods could go here later
+
+
+# --- Define a structure for component info ---
+class ComponentInfo(TypedDict):  # Using TypedDict for clarity
+    sku: str
+    type: str  # e.g., "InventoryProduct" or ProductTypeEnum.INVENTORY.value
+    quantity: int
 
 
 # --- 4. Composite: Assembly ---
@@ -142,9 +169,16 @@ class Assembly(SQLModel, Sellable, table=True):
     title: str = Field(index=True)
     description: Optional[str] = Field(default=None)
     images: Optional[List[str]] = Field(default=None, sa_column=Column(JSONB))
-    component_skus: Optional[List[str]] = Field(default=None, sa_column=Column(JSONB))
-
+    component_info: Optional[List[ComponentInfo]] = Field(
+        default=None, sa_column=Column(JSONB)
+    )
     # --- Implement Sellable interface for the Assembly itself ---
+
+    def get_sku(self) -> str:
+        return self.sku
+
+    def get_title(self) -> str:
+        return self.title
 
     def get_price(self) -> float:
         # Price calculation now requires fetching components based on SKUs.
@@ -164,6 +198,14 @@ class Assembly(SQLModel, Sellable, table=True):
         # Return the assembly's specific images (representing the assembled product)
         # Could potentially combine child images later if needed, but keep simple for now.
         return self.images or []
+
+    def get_type(self) -> ProductTypeEnum:
+        return ProductTypeEnum.ASSEMBLY
+
+        # --- Methods for accessing component info ---
+
+    def get_component_info(self) -> list[ComponentInfo]:
+        return self.component_info or []
 
 
 # --- Example Usage ---
