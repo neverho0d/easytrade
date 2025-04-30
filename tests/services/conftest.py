@@ -20,6 +20,7 @@ from marketplace_aggregator.repositories.service_product_repo import (
 )
 from marketplace_aggregator.repositories.listing_repo import ListingRepository
 from marketplace_aggregator.adapters.marketplace import Marketplace
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # --- Move ALL Fixtures Here ---
 
@@ -81,6 +82,32 @@ def mock_marketplace_adapter() -> MagicMock:
 
 
 @pytest.fixture
+def mock_db_session() -> MagicMock:
+    """Creates a mock database session suitable for 'async with session.begin():'."""
+    mock_session = MagicMock(spec=AsyncSession)
+
+    # Mock the transaction context manager returned by begin()
+    mock_transaction = AsyncMock() # The object returned by begin()
+    # Configure its __aenter__ and __aexit__ methods
+    # __aenter__ usually returns the transaction object itself or None
+    mock_transaction.__aenter__.return_value = None
+    # __aexit__ needs to accept exception type, value, traceback args
+    # Configure it to return None (indicating success/exception handled)
+    mock_transaction.__aexit__ = AsyncMock(return_value=None)
+
+    # Configure the session's begin() method to return our mock transaction
+    mock_session.begin = MagicMock(return_value=mock_transaction)
+
+    # Mock other methods if the service calls them directly (optional)
+    mock_session.commit = AsyncMock()
+    mock_session.rollback = AsyncMock()
+    mock_session.flush = AsyncMock()
+    # Add mock implementations for add, scalar, scalars etc. if service uses them directly
+
+    return mock_session
+
+
+@pytest.fixture
 def listing_service(
     mock_promotional_rule_repo,
     mock_inventory_product_repo,
@@ -89,6 +116,7 @@ def listing_service(
     mock_service_product_repo,
     mock_listing_repo,
     mock_marketplace_adapter,
+    mock_db_session,
 ) -> ListingService:
     """Creates a ListingService instance with all mocked dependencies."""
     adapters = {mock_marketplace_adapter.name: mock_marketplace_adapter}
@@ -100,5 +128,6 @@ def listing_service(
         service_product_repo=mock_service_product_repo,
         listing_repo=mock_listing_repo,
         marketplace_adapters=adapters,
+        db_session=mock_db_session,
     )
     return service

@@ -1,4 +1,5 @@
 # src/marketplace_aggregator/db.py
+
 import os
 from typing import AsyncGenerator
 
@@ -17,7 +18,7 @@ if not DATABASE_URL:
 
 # Create the async engine
 # echo=True is useful for debugging SQL, remove in production
-engine = create_async_engine(DATABASE_URL, echo=True, future=True)
+engine = create_async_engine(DATABASE_URL, echo=False, future=True)
 
 # Create a configured "Session" class - name convention change in recent SQLAlchemy
 # AsyncSessionFactory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

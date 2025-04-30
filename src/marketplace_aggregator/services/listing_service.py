@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from marketplace_aggregator.models.dto import AssemblyListingData, VariableListingData
 from marketplace_aggregator.models.listing import Listing, ListingStateError
@@ -53,6 +54,7 @@ class ListingService:
         service_product_repo: ServiceProductRepository,
         listing_repo: ListingRepository,
         marketplace_adapters: Dict[str, Marketplace],  # Inject dependencies
+        db_session: AsyncSession,
     ):
         """
         Initializes the service with necessary dependencies.
@@ -74,6 +76,7 @@ class ListingService:
         self._service_product_repo = service_product_repo
         self._listing_repo = listing_repo
         self._marketplace_adapters = marketplace_adapters
+        self._db_session = db_session
         print("ListingService initialized.")
 
     # --- Helper to get the active rule ---
@@ -215,10 +218,13 @@ class ListingService:
         adapter_name: str,
     ) -> Listing:
         """Creates and saves the internal Listing record."""
+        rule_id_val = rule.id
+        product_identifier_val = rule.product_identifier
+        price_override_val = rule.price_override
         try:
-            print(f"Service: Saving internal listing record for rule {rule.id}...")
+            print(f"Service: Saving internal listing record for rule {rule_id_val}...")
             # Determine price (use override or fetch from product data)
-            price_to_store = rule.price_override
+            price_to_store = price_override_val
             if price_to_store is None:
                 if isinstance(product_data, Sellable):
                     price_to_store = product_data.get_price()
@@ -237,21 +243,22 @@ class ListingService:
                     price_to_store = None  # Fallback
 
             new_listing = Listing(
-                rule_id=rule.id,
-                product_identifier=rule.product_identifier,
+                rule_id=rule_id_val,
+                product_identifier=product_identifier_val,
                 marketplace_name=adapter_name,
                 marketplace_listing_id=marketplace_listing_id,
                 status="active",  # Default status on successful creation
                 listed_price=price_to_store,
                 last_updated_at=datetime.now(timezone.utc),
             )
+            print(f"Service: Internal listing record to save: {new_listing}")
             await self._listing_repo.add(new_listing)
-            print(f"Service: Internal listing record saved for rule {rule.id}.")
+            print(f"Service: Internal listing record saved for rule {rule_id_val}.")
             return new_listing
         except Exception as repo_err:
             # Wrap repo error in our custom exception
             print(
-                f"Service CRITICAL ERROR: Failed to save listing record for rule {rule.id}. Error: {repo_err}"
+                f"Service CRITICAL ERROR: Failed to save listing record for rule {rule_id_val}. Error: {repo_err}"
             )
             raise ListingRecordSaveError(
                 listing_id=marketplace_listing_id, original_exception=repo_err
@@ -265,76 +272,81 @@ class ListingService:
         print(f"\nService: Processing listing submission for rule ID '{rule_id}'...")
         listing_id_on_marketplace: Optional[str] = None  # Define before try
 
-        try:
-            # Step 1: Get Rule (raises RuleNotFound / RuleInactive)
-            rule = await self._get_active_rule(rule_id)
-            print(
-                f"Service: Found active rule for Product '{rule.product_identifier}' on '{rule.marketplace_name}'"
-            )
+        print(f"Service: DB Session info: {self._db_session.info}")
 
-            # Step 2: Get Adapter (raises AdapterNotFound)
-            adapter = self._get_adapter(rule.marketplace_name)
+        async with self._db_session.begin():
+            try:
+                # Step 1: Get Rule (raises RuleNotFound / RuleInactive)
+                rule = await self._get_active_rule(rule_id)
+                print(
+                    f"Service: Found active rule for Product '{rule.product_identifier}' on '{rule.marketplace_name}'"
+                )
 
-            # Step 3: Prepare Data (raises ProductNotFound / ListingPreparationError)
-            data_to_submit = await self._prepare_listing_data(rule)
-            print(
-                f"Service: Prepared data of type '{data_to_submit.__class__.__name__}' for adapter."
-            )
+                # Step 2: Get Adapter (raises AdapterNotFound)
+                adapter = self._get_adapter(rule.marketplace_name)
 
-            # Step 4: Prepare Config (simple dict access) just make sure it's not None
-            # the actual logic to apply overrides is on the adapter level
-            listing_config = rule.marketplace_specific_settings or {}
+                # Step 3: Prepare Data (raises ProductNotFound / ListingPreparationError)
+                data_to_submit = await self._prepare_listing_data(rule)
+                print(
+                    f"Service: Prepared data of type '{data_to_submit.__class__.__name__}' for adapter."
+                )
 
-            # Step 5: Submit Listing (raises ListingError / other Exceptions)
-            print(f"Service: Submitting item via {adapter.name} adapter...")
-            listing_id_on_marketplace = await adapter.submit_listing(
-                data_to_submit, listing_config=listing_config
-            )
-            print(
-                f"Service: Successfully submitted listing. Marketplace Listing ID: {listing_id_on_marketplace}"
-            )
+                # Step 4: Prepare Config (simple dict access) just make sure it's not None
+                # the actual logic to apply overrides is on the adapter level
+                listing_config = rule.marketplace_specific_settings or {}
 
-            # Step 6: Save Listing Record (raises ListingRecordSaveError)
-            await self._save_listing_record(
-                rule, data_to_submit, listing_id_on_marketplace, adapter.name
-            )
+                # Step 5: Submit Listing (raises ListingError / other Exceptions)
+                print(f"Service: Submitting item via {adapter.name} adapter...")
+                listing_id_on_marketplace = await adapter.submit_listing(
+                    data_to_submit, listing_config=listing_config
+                )
+                print(
+                    f"Service: Successfully submitted listing. Marketplace Listing ID: {listing_id_on_marketplace}"
+                )
 
-            # If all steps succeeded:
-            return listing_id_on_marketplace
+                # Step 6: Save Listing Record (raises ListingRecordSaveError)
+                await self._save_listing_record(
+                    rule, data_to_submit, listing_id_on_marketplace, adapter.name
+                )
 
-        except (
-            RuleNotFoundError,
-            RuleInactiveError,
-            ProductNotFoundError,
-            AdapterNotFoundError,
-            ListingPreparationError,
-        ) as e:
-            # Expected errors during setup/data fetching
-            print(f"Service INFO: Listing aborted for rule {rule_id}. Reason: {e}")
-            return None
-        except ListingError as e:
-            # Expected errors reported by the marketplace adapter
-            print(
-                f"Service ERROR: Marketplace submission failed for rule {rule_id}. Adapter Error: {e}"
-            )
-            # Optionally: Mark rule as failed? Report error on listing state?
-            return None
-        except ListingRecordSaveError as e:
-            # Critical error: Listing created externally, but couldn't save state internally
-            print(
-                f"Service CRITICAL: Listing submitted ({e.listing_id}) but failed internal save! Rule {rule_id}. Error: {e.original_exception}"
-            )
-            # Decide what to return: the external ID (caller might try to reconcile?), or None?
-            # Returning None might be safer if internal state is crucial.
-            return None  # Changed from returning ID
-        except Exception as e:
-            # Catch any other unexpected errors
-            print(
-                f"Service CRITICAL: Unexpected error processing rule {rule_id}. Error: {e}"
-            )
-            # Consider logging traceback here
-            # import traceback; traceback.print_exc()
-            return None
+                # If all steps succeeded:
+                return listing_id_on_marketplace
+
+            except (
+                RuleNotFoundError,
+                RuleInactiveError,
+                ProductNotFoundError,
+                AdapterNotFoundError,
+                ListingPreparationError,
+            ) as e:
+                # Expected errors during setup/data fetching
+                print(f"Service INFO: Listing aborted for rule {rule_id}. Reason: {e}")
+                return None
+            except ListingError as e:
+                # Expected errors reported by the marketplace adapter
+                print(
+                    f"Service ERROR: Marketplace submission failed for rule {rule_id}. Adapter Error: {e}"
+                )
+                # Optionally: Mark rule as failed? Report error on listing state?
+                return None
+            except ListingRecordSaveError as e:
+                # Critical error: Listing created externally, but couldn't save state internally
+                print(
+                    f"Service CRITICAL: Listing submitted ({e.listing_id}) but failed internal save! Rule {rule_id}. Error: {e.original_exception}"
+                )
+                # Decide what to return: the external ID (caller might try to reconcile?), or None?
+                # Returning None might be safer if internal state is crucial.
+                return None  # Changed from returning ID
+            except Exception as e:
+                # Catch any other unexpected errors
+                print(
+                    f"Service CRITICAL: Unexpected error processing rule {rule_id}. Error: {e}"
+                )
+                # Consider logging traceback here
+                import traceback
+
+                traceback.print_exc()
+                return None
 
     async def _get_listing_record(
         self, marketplace_name: str, listing_id: str
@@ -351,80 +363,82 @@ class ListingService:
         self, listing_id: str, marketplace_name: str, sku: str, new_price: float
     ) -> bool:
         print("\nService: Attempting price update...")
-        try:
-            listing = await self._get_listing_record(marketplace_name, listing_id)
-            print(
-                f"Service: Found listing: {listing}, current status: {listing.current_status}"
-            )
-            listing.update_price(new_price)
-            adapter = self._get_adapter(listing.marketplace_name)
-            print(f"Service: Updating price via {adapter.name} adapter...")
-            await adapter.update_listing_price(
-                listing_id, sku, new_price
-            )  # await adapter call
-            await self._listing_repo.update(listing)
-        except ListingRecordGetError as e:
-            print(
-                f"Service ERROR: Failed to get listing record for {listing_id}. Error: {e}"
-            )
-            return False
-        except ListingStateError as e:
-            print(f"Service ERROR: Failed to update listing price... Error: {e}")
-            return False
-        except AdapterNotFoundError as e:
-            print(
-                f"Service ERROR: Marketplace adapter '{marketplace_name}' not configured. Error: {e}"
-            )
-            return False
-        except ListingRecordSaveError as e:
-            print(
-                f"Service CRITICAL: Listing submitted ({e.listing_id}) but failed internal save! Error: {e.original_exception}"
-            )
-            # Decide what to return: the external ID (caller might try to reconcile?), or None?
-            # Returning None might be safer if internal state is crucial.
-            return False
-        except Exception as e:
-            print(f"Service CRITICAL ERROR during price update: {e}")
-            return False
-        return True
+        async with self._db_session.begin():
+            try:
+                listing = await self._get_listing_record(marketplace_name, listing_id)
+                print(
+                    f"Service: Found listing: {listing}, current status: {listing.current_status}"
+                )
+                listing.update_price(new_price)
+                adapter = self._get_adapter(listing.marketplace_name)
+                print(f"Service: Updating price via {adapter.name} adapter...")
+                await adapter.update_listing_price(
+                    listing_id, sku, new_price
+                )  # await adapter call
+                await self._listing_repo.update(listing)
+            except ListingRecordGetError as e:
+                print(
+                    f"Service ERROR: Failed to get listing record for {listing_id}. Error: {e}"
+                )
+                return False
+            except ListingStateError as e:
+                print(f"Service ERROR: Failed to update listing price... Error: {e}")
+                return False
+            except AdapterNotFoundError as e:
+                print(
+                    f"Service ERROR: Marketplace adapter '{marketplace_name}' not configured. Error: {e}"
+                )
+                return False
+            except ListingRecordSaveError as e:
+                print(
+                    f"Service CRITICAL: Listing submitted ({e.listing_id}) but failed internal save! Error: {e.original_exception}"
+                )
+                # Decide what to return: the external ID (caller might try to reconcile?), or None?
+                # Returning None might be safer if internal state is crucial.
+                return False
+            except Exception as e:
+                print(f"Service CRITICAL ERROR during price update: {e}")
+                return False
+            return True
 
-    async def update_stock_on_marketplace(  # Add async
+    async def update_stock_on_marketplace(
         self, listing_id: str, marketplace_name: str, sku_stock: Dict[str, int]
     ) -> bool:
         print("\nService: Attempting stock update...")
-        try:
-            listing = await self._get_listing_record(marketplace_name, listing_id)
-            print(
-                f"Service: Found listing: {listing}, current status: {listing.current_status}"
-            )
-            listing.update_stock(sku_stock)
-            adapter = self._get_adapter(listing.marketplace_name)
-            print(f"Service: Updating stock via {adapter.name} adapter...")
-            await adapter.update_listing_stock(
-                listing_id, sku_stock
-            )  # await adapter call
-            await self._listing_repo.update(listing)
-        except ListingRecordGetError as e:
-            print(
-                f"Service ERROR: Failed to get listing record for {listing_id}. Error: {e}"
-            )
-            return False
-        except ListingStateError as e:
-            print(f"Service ERROR: Failed to update listing stock... Error: {e}")
-            return False
-        except AdapterNotFoundError as e:
-            print(
-                f"Service ERROR: Marketplace adapter '{marketplace_name}' not configured. Error: {e}"
-            )
-            return False
-        except ListingRecordSaveError as e:
-            print(
-                f"Service CRITICAL: Listing submitted ({e.listing_id}) but failed internal save! Error: {e.original_exception}"
-            )
-            # Decide what to return: the external ID (caller might try to reconcile?), or None?
-            # Returning None might be safer if internal state is crucial.
-            return False
-        except Exception as e:
-            print(f"Service CRITICAL ERROR during stock update: {e}")
-            return False
-        return True
+        async with self._db_session.begin():
+            try:
+                listing = await self._get_listing_record(marketplace_name, listing_id)
+                print(
+                    f"Service: Found listing: {listing}, current status: {listing.current_status}"
+                )
+                listing.update_stock(sku_stock)
+                adapter = self._get_adapter(listing.marketplace_name)
+                print(f"Service: Updating stock via {adapter.name} adapter...")
+                await adapter.update_listing_stock(
+                    listing_id, sku_stock
+                )  # await adapter call
+                await self._listing_repo.update(listing)
+            except ListingRecordGetError as e:
+                print(
+                    f"Service ERROR: Failed to get listing record for {listing_id}. Error: {e}"
+                )
+                return False
+            except ListingStateError as e:
+                print(f"Service ERROR: Failed to update listing stock... Error: {e}")
+                return False
+            except AdapterNotFoundError as e:
+                print(
+                    f"Service ERROR: Marketplace adapter '{marketplace_name}' not configured. Error: {e}"
+                )
+                return False
+            except ListingRecordSaveError as e:
+                print(
+                    f"Service CRITICAL: Listing submitted ({e.listing_id}) but failed internal save! Error: {e.original_exception}"
+                )
+                # Decide what to return: the external ID (caller might try to reconcile?), or None?
+                # Returning None might be safer if internal state is crucial.
+                return False
+            except Exception as e:
+                print(f"Service CRITICAL ERROR during stock update: {e}")
+                return False
+            return True

@@ -46,7 +46,7 @@ from marketplace_aggregator.controllers.listing_controller import ListingControl
 # and makes AsyncSession available for dependency injection.
 sqlalchemy_config = SQLAlchemyAsyncConfig(
     engine_instance=db_engine,  # Pass our async engine
-    session_dependency_key="session",  # Explicitly set the session dependency key
+    session_dependency_key="db_session",  # Explicitly set the session dependency key
 )
 sqlalchemy_plugin = SQLAlchemyPlugin(config=sqlalchemy_config)
 
@@ -61,30 +61,36 @@ async def create_marketplace_adapters() -> Dict[str, Marketplace]:
     return {fakemazon.name: fakemazon}
 
 
-async def get_listing_repo(session: AsyncSession) -> ListingRepository:
-    return ListingRepository(session=session)
+async def get_listing_repo(db_session: AsyncSession) -> ListingRepository:
+    return ListingRepository(session=db_session)
 
 
-async def get_promotional_rule_repo(session: AsyncSession) -> PromotionalRuleRepository:
-    return PromotionalRuleRepository(session=session)
+async def get_promotional_rule_repo(
+    db_session: AsyncSession,
+) -> PromotionalRuleRepository:
+    return PromotionalRuleRepository(session=db_session)
 
 
 async def get_inventory_product_repo(
-    session: AsyncSession,
+    db_session: AsyncSession,
 ) -> InventoryProductRepository:
-    return InventoryProductRepository(session=session)
+    return InventoryProductRepository(session=db_session)
 
 
-async def get_variable_product_repo(session: AsyncSession) -> VariableProductRepository:
-    return VariableProductRepository(session=session)
+async def get_variable_product_repo(
+    db_session: AsyncSession,
+) -> VariableProductRepository:
+    return VariableProductRepository(session=db_session)
 
 
-async def get_assembly_repo(session: AsyncSession) -> AssemblyRepository:
-    return AssemblyRepository(session=session)
+async def get_assembly_repo(db_session: AsyncSession) -> AssemblyRepository:
+    return AssemblyRepository(session=db_session)
 
 
-async def get_service_product_repo(session: AsyncSession) -> ServiceProductRepository:
-    return ServiceProductRepository(session=session)
+async def get_service_product_repo(
+    db_session: AsyncSession,
+) -> ServiceProductRepository:
+    return ServiceProductRepository(session=db_session)
 
 
 async def get_listing_service(
@@ -95,6 +101,7 @@ async def get_listing_service(
     assembly_repo: AssemblyRepository,
     service_product_repo: ServiceProductRepository,
     marketplace_adapters: Dict[str, Marketplace],
+    db_session: AsyncSession,
 ) -> ListingService:
     return ListingService(
         listing_repo=listing_repo,
@@ -104,6 +111,7 @@ async def get_listing_service(
         assembly_repo=assembly_repo,
         service_product_repo=service_product_repo,
         marketplace_adapters=marketplace_adapters,
+        db_session=db_session,
     )
 
 

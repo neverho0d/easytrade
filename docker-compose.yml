@@ -6,6 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-user} # Read from .env or use default
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: ${POSTGRES_DB:-marketplace_db}
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_TEST_DB:-marketplace_test_db_test}
     ports:
       - "${POSTGRES_PORT:-5432}:5432" # Expose port 5432
     volumes:

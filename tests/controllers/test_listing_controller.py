@@ -1,7 +1,9 @@
 # tests/controllers/test_listing_controller.py
 
+from marketplace_aggregator.models.listing import Listing
+from marketplace_aggregator.repositories.listing_repo import ListingRepository
 import pytest
-from unittest.mock import AsyncMock  # Need AsyncMock for mocking async method
+from unittest.mock import AsyncMock, MagicMock  # Need AsyncMock for mocking async method
 
 from litestar import Litestar
 from litestar.testing import AsyncTestClient
@@ -14,6 +16,8 @@ from marketplace_aggregator.controllers.listing_controller import (
     ListByRuleRequest,
     ListingResponse,
 )
+
+from datetime import datetime, timezone
 
 
 @pytest.mark.asyncio
@@ -85,9 +89,8 @@ async def test_create_listing_service_fails(
     response = await test_client.post("/listings", json=request_data)
 
     # Assert
-    # 1. Check status code - current controller logic returns 200 even on error,
-    #    which is maybe not ideal but what we test now. Could change to 4xx/5xx later.
-    assert response.status_code in [200, 201]
+    # 1. Check status code - have to be 400
+    assert response.status_code == 400
 
     # 2. Check the response body indicates an error
     response_data = response.json()
@@ -155,3 +158,61 @@ async def test_create_listing_missing_input_field(
     # Assert
     assert response.status_code == 400
     mock_service_call.assert_not_awaited()
+
+@pytest.mark.asyncio
+async def test_list_listings_success(
+    test_client: AsyncTestClient[Litestar], # Use Litestar's test client
+    mocker # Use mocker to patch the repository dependency provider if needed, or inject mock repo
+):
+    """Test GET /listings endpoint for successfully retrieving all listings."""
+    # Arrange
+    # Create some mock Listing data that the repository should return
+    mock_listing1 = Listing(
+        id=1, product_identifier="SKU001", marketplace_name="TestPlace",
+        marketplace_listing_id="LST1", status="active", rule_id=1,
+        created_at=datetime.now(timezone.utc),
+        last_updated_at=datetime.now(timezone.utc)
+    )
+    mock_listing2 = Listing(
+        id=2, product_identifier="SKU002", marketplace_name="TestPlace",
+        marketplace_listing_id="LST2", status="pending", rule_id=2,
+        created_at=datetime.now(timezone.utc),
+        last_updated_at=datetime.now(timezone.utc)
+    )
+    mock_listings_list = [mock_listing1, mock_listing2]
+
+    # --- Mock the ListingRepository ---
+    mock_list_all = mocker.patch.object(
+        ListingRepository, # Patch the actual repository class
+        "list_all",        # The method to patch
+        new_callable=AsyncMock,
+        return_value=mock_listings_list # Configure return value
+    )
+    # --- End Mocking ---
+
+    # Act: Make the API request
+    response = await test_client.get("/listings")
+
+    # Assert
+    # 1. Check status code
+    assert response.status_code == 200
+
+    # 2. Check response body structure and content
+    response_data = response.json()
+    assert isinstance(response_data, list)
+    print(f"Controller: Response data: {response_data}")
+    assert len(response_data) == len(mock_listings_list)
+
+    # Convert models to dicts for comparison (assuming serialization works)
+    # Note: SQLModel/Pydantic might serialize datetime differently than default json.dumps
+    # Be mindful of timestamp formats if comparing dicts directly.
+    # Comparing essential fields is often more robust.
+    expected_data = [listing.model_dump(exclude={'_state'}) for listing in mock_listings_list] # Use model_dump
+    # Adjust expected data if serialization format differs (e.g., datetime strings)
+    assert response_data[0]['marketplace_listing_id'] == expected_data[0]['marketplace_listing_id']
+    assert response_data[1]['marketplace_listing_id'] == expected_data[1]['marketplace_listing_id']
+    assert response_data[0]['product_identifier'] == expected_data[0]['product_identifier']
+    assert response_data[1]['product_identifier'] == expected_data[1]['product_identifier']
+
+    # 3. Verify the repository method was called
+    mock_list_all.assert_awaited_once()

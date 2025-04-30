@@ -6,6 +6,7 @@ from datetime import datetime, timezone  # Use timezone for UTC
 from typing import Dict, Optional, Any
 
 from pydantic import PrivateAttr
+from sqlalchemy import TIMESTAMP, Column, text
 from sqlmodel import Field, SQLModel
 
 
@@ -245,9 +246,22 @@ class Listing(SQLModel, table=True):
 
     # --- Timestamps ---
     # Default to current UTC time
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default=None,  # Let the database handle the default
+        sa_column=Column(
+            TIMESTAMP(timezone=True),  # Use TIMESTAMPTZ
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),  # DB generates default
+        ),
+    )
     last_updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default=None,  # Let the database handle the default
+        sa_column=Column(
+            TIMESTAMP(timezone=True),  # Use TIMESTAMPTZ
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+            onupdate=text("CURRENT_TIMESTAMP"),  # DB handles updates automatically
+        ),
     )
     # Internal state object - not mapped to DB, init=False
     _state: ListingState = PrivateAttr()

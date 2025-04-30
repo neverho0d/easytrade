@@ -39,9 +39,11 @@ line-length = 88
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+# testpaths = ["tests", "tests/integration"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function" # should be "function" in future
+asyncio_default_fixture_loop_scope = "module"
+# asyncio_default_test_loop_scope = "function"
 # addopts = "-ra -q" # Example options
 
 [tool.mypy]

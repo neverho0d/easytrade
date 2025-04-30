@@ -1,10 +1,10 @@
 # src/marketplace_aggregator/models/promotional_rule.py
 
 from typing import Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlmodel import SQLModel, Field
-from sqlalchemy import Column
+from sqlalchemy import TIMESTAMP, Column, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from marketplace_aggregator.models.product import ProductTypeEnum
@@ -57,8 +57,19 @@ class PromotionalRule(SQLModel, table=True):
 
     # --- Timestamps ---
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), nullable=False
+        default=None,  # Let the database handle the default
+        sa_column=Column(
+            TIMESTAMP(timezone=True),  # Use TIMESTAMPTZ
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),  # DB generates default
+        ),
     )
     last_updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), nullable=False
+        default=None,  # Let the database handle the default
+        sa_column=Column(
+            TIMESTAMP(timezone=True),  # Use TIMESTAMPTZ
+            nullable=False,
+            server_default=text("CURRENT_TIMESTAMP"),
+            onupdate=text("CURRENT_TIMESTAMP"),  # DB handles updates automatically
+        ),
     )
